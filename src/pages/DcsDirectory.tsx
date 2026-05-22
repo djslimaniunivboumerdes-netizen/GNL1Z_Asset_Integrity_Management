@@ -144,11 +144,12 @@ export default function DcsDirectory() {
             to={`/dcs/${p.id}`}
             className="group relative overflow-hidden border border-border rounded-lg bg-card hover:border-accent/50 hover:shadow-industrial transition-all"
           >
-            <div className="aspect-video bg-secondary/40 overflow-hidden border-b border-border">
+            {/* FIX: object-contain instead of object-cover to prevent crushed images */}
+            <div className="aspect-video bg-black overflow-hidden border-b border-border">
               <img
                 src={driveImageUrl(p.drive_id)}
                 alt={lang === "en" ? p.title_en : p.title_fr}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
                 referrerPolicy="no-referrer"
               />
