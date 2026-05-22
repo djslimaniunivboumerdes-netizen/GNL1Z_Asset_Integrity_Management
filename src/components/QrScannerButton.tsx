@@ -178,4 +178,4 @@ export function QrScannerButton({ onScan }: QrScannerButtonProps) {
       </Dialog>
     </>
   );
-}
+        }
