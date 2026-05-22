@@ -166,8 +166,8 @@ export default function DownloadPage({ lang = "en" }: { lang?: "en" | "fr" }) {
     fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
       .then(r => r.json())
       .then((d: unknown) => { 
-        const data = d as Record<string, unknown>;
-        if (data.tag_name) setRelease(data as Release); 
+        const data = d as unknown as Record<string, unknown>;
+        if (data.tag_name) setRelease(d as unknown as Release); 
       })
       .catch(() => {})
       .finally(() => setLoading(false));

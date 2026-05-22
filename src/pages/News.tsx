@@ -334,7 +334,7 @@ const CACHE_TTL_MS  = 5 * 24 * 60 * 60 * 1000;   // 5 days
 const STALE_TTL_MS  = 7 * 24 * 60 * 60 * 1000;   // show stale up to 7 days
 
 async function loadFromCache(): Promise<{ data: NewsData; ageMs: number } | null> {
-  const { data: row, error } = await supabase
+  const { data: row, error } = await (supabase as any)
     .from("news_cache")
     .select("data, fetched_at")
     .eq("id", "singleton")
