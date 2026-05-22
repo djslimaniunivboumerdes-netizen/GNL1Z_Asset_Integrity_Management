@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Cpu, ExternalLink, Sparkles, RefreshCw, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,6 @@ export default function DcsDetail() {
   useEffect(() => {
     if (!panel) return;
     let active = true;
-    // Seed from pre-scanned cache so users see results without running AI
     const cached = getTagsForPanel(panel.id);
     if (cached.length) setTags(cached);
     (async () => {
@@ -63,9 +62,16 @@ export default function DcsDetail() {
     toast({ title: lang === "en" ? `Found ${t.length} instrument tag(s)` : `${t.length} tag(s) détecté(s)` });
   };
 
-  const related = (panel.related_tags ?? [])
-    .map((tag) => getEquipmentByTag(tag))
-    .filter((e): e is NonNullable<typeof e> => !!e);
+  /* FIX: Merge AI-detected tags with static related_tags so all related equipment shows up */
+  const related = useMemo(() => {
+    const allTags = new Set([
+      ...(panel.related_tags ?? []),
+      ...(tags ?? []),
+    ]);
+    return Array.from(allTags)
+      .map((tag) => getEquipmentByTag(tag))
+      .filter((e): e is NonNullable<typeof e> => !!e);
+  }, [panel, tags]);
 
   return (
     <div className="px-4 md:px-8 py-6 md:py-8 max-w-7xl mx-auto">
@@ -104,11 +110,12 @@ export default function DcsDetail() {
             </a>
           </Button>
         </div>
-        <div className="bg-black">
+        {/* FIX: object-contain + max-height so images aren't crushed */}
+        <div className="bg-black flex items-center justify-center">
           <img
             src={driveImageUrl(panel.drive_id)}
             alt={lang === "en" ? panel.title_en : panel.title_fr}
-            className="w-full h-auto"
+            className="w-full h-auto max-h-[70vh] object-contain"
             referrerPolicy="no-referrer"
           />
         </div>
@@ -179,7 +186,7 @@ export default function DcsDetail() {
               <Link
                 key={eq.tag}
                 to={`/equipment/${encodeURIComponent(eq.tag)}`}
-                className="group flex items-center justify-between border border-border rounded p-3 hover:border-accent/50 hover:bg-secondary/30 transition-all"
+                className="group flex items-center justify-between border border-border rounded p-3 hover:border-accent/50 hover:bow-secondary/30 transition-all"
               >
                 <div>
                   <div className="font-mono text-xs text-accent font-semibold">{eq.tag}</div>
@@ -191,7 +198,6 @@ export default function DcsDetail() {
           </div>
         )}
       </div>
-
       <Button asChild variant="ghost" size="sm">
         <Link to="/dcs"><ArrowLeft className="h-4 w-4 mr-1" /> {t("back")}</Link>
       </Button>
