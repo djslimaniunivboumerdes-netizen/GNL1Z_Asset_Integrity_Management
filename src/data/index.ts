@@ -98,3 +98,6 @@ export function getEquipmentByTag(tag: string): Equipment | undefined {
 export function isShellAndTube(eq: Equipment): boolean {
   return eq.type.code === "E";
 }
+export function getAllEquipmentTags(): string[] {
+  return EQUIPMENT.map((e) => e.tag);
+}
