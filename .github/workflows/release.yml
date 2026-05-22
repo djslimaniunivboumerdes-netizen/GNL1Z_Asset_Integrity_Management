@@ -1,0 +1,86 @@
+name: Build & Release All Platforms
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Build Vite (electron base)
+        run: bun run build:electron
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+      - name: Build EXE
+        run: bunx electron-builder --win --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with: { name: windows-exe, path: release/*.exe, retention-days: 30 }
+
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - name: Build Vite (electron base)
+        run: bun run build:electron
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+      - name: Build AppImage
+        run: bunx electron-builder --linux --publish never
+      - uses: actions/upload-artifact@v4
+        with: { name: linux-appimage, path: release/*.AppImage, retention-days: 30 }
+
+  create-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: windows-exe, path: ./release-assets/ }
+      - uses: actions/download-artifact@v4
+        with: { name: linux-appimage, path: ./release-assets/ }
+      - id: ver
+        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: "GNL1Z v${{ steps.ver.outputs.version }}"
+          body: |
+            ## GNL1Z Asset Management — Sonatrach Arzew
+
+            | Platform | Download |
+            |---|---|
+            | Android | `GNL1Z-Android.apk` (attach manually) |
+            | Windows | `GNL1Z-Setup-*.exe` |
+            | Linux   | `GNL1Z-*.AppImage` |
+            | Web     | https://gnl1z-sonatrach.workers.dev |
+
+            **Android install:** Download APK → Settings → Allow Unknown Sources → Install
+          files: ./release-assets/*
+          draft: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
