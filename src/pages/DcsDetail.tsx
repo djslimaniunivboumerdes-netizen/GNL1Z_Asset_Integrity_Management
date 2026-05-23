@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Cpu, ExternalLink, Sparkles, RefreshCw, Tag } fr
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/contexts/I18nContext";
-import { getDcsPanel, driveViewUrl } from "@/data/dcs_panels";
+import { getDcsPanel, driveImageUrl, driveViewUrl } from "@/data/dcs_panels";
 import { getEquipmentByTag } from "@/data";
 import { getTagsForPanel } from "@/data/dcs_tags";
 import { supabase } from "@/integrations/supabase/client";
