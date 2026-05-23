@@ -123,11 +123,11 @@ export default function DcsDetail() {
               </a>
             </div>
           ) : (
-            <img
-              src={driveImageUrl(panel.drive_id)}
+            <DriveImg
+              driveId={panel.drive_id}
               alt={lang === "en" ? panel.title_en : panel.title_fr}
               className="w-full h-auto max-h-[72vh] object-contain"
-              onError={() => setImgErr(true)}
+              fallbackClassName="flex flex-col items-center gap-3 text-white/30 py-16"
             />
           )}
         </div>
