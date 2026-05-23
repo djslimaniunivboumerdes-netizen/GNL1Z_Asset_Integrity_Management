@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback, useMemo } from "react";
-import { ScanLine, X, Search } from "lucide-react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { ScanLine, X, Search, AlertTriangle } from "lucide-react";
+import jsQR from "jsqr";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Fuse from "fuse.js";
@@ -12,19 +13,16 @@ interface QrScannerButtonProps {
 export function QrScannerButton({ onScan }: QrScannerButtonProps) {
   const [open, setOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const [manualInput, setManualInput] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [camError, setCamError] = useState<string | null>(null);
 
-  // Build fuse index for equipment tags — fuzzy match on tag + name
   const fuse = useMemo(() => {
     const tags = getAllEquipmentTags();
-    return new Fuse(tags, {
-      threshold: 0.35,
-      distance: 100,
-      includeScore: false,
-    });
+    return new Fuse(tags, { threshold: 0.35, distance: 100, includeScore: false });
   }, []);
 
   const handleInputChange = (value: string) => {
@@ -37,51 +35,94 @@ export function QrScannerButton({ onScan }: QrScannerButtonProps) {
     }
   };
 
-  const handleSelect = (tag: string) => {
-    onScan(tag);
-    handleClose();
-  };
-
   const stopCamera = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = 0;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
   }, []);
 
+  // Extract a usable tag from arbitrary QR payloads (plain text, URL, query).
+  const extractTag = (raw: string): string => {
+    const trimmed = raw.trim();
+    const m = trimmed.match(/\/equipment\/([^/?#]+)/i);
+    if (m) return decodeURIComponent(m[1]);
+    try {
+      const u = new URL(trimmed);
+      const t = u.searchParams.get("tag") || u.searchParams.get("id");
+      if (t) return t;
+    } catch { /* not a URL */ }
+    return trimmed;
+  };
+
+  const handleClose = useCallback(() => {
+    stopCamera();
+    setOpen(false);
+    setManualInput("");
+    setSuggestions([]);
+    setCamError(null);
+  }, [stopCamera]);
+
+  const handleSelect = (tag: string) => {
+    onScan(tag);
+    handleClose();
+  };
+
   const startScan = useCallback(async () => {
+    setCamError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      const scan = () => {
-        if (!videoRef.current || !open) return;
-        rafRef.current = requestAnimationFrame(scan);
+      const video = videoRef.current;
+      if (!video) return;
+      video.srcObject = stream;
+      video.setAttribute("playsinline", "true");
+      await video.play();
+
+      const canvas = canvasRef.current ?? document.createElement("canvas");
+      canvasRef.current = canvas;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      const tick = () => {
+        if (!streamRef.current || !video) return;
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          const w = video.videoWidth, h = video.videoHeight;
+          if (w && h) {
+            canvas.width = w; canvas.height = h;
+            ctx.drawImage(video, 0, 0, w, h);
+            const img = ctx.getImageData(0, 0, w, h);
+            const code = jsQR(img.data, w, h, { inversionAttempts: "dontInvert" });
+            if (code?.data) {
+              const tag = extractTag(code.data);
+              stopCamera();
+              setOpen(false);
+              onScan(tag);
+              return;
+            }
+          }
+        }
+        rafRef.current = requestAnimationFrame(tick);
       };
-      rafRef.current = requestAnimationFrame(scan);
-    } catch {
-      // Fallback: let user type
+      rafRef.current = requestAnimationFrame(tick);
+    } catch (e) {
+      setCamError(e instanceof Error ? e.message : "Camera unavailable");
     }
-  }, [open]);
+  }, [onScan, stopCamera]);
 
   const handleOpen = () => {
     setOpen(true);
     setSuggestions([]);
+    setCamError(null);
     setTimeout(startScan, 300);
   };
 
-  const handleClose = () => {
-    stopCamera();
-    setOpen(false);
-    setManualInput("");
-    setSuggestions([]);
-  };
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
 
   return (
     <>
@@ -114,8 +155,15 @@ export function QrScannerButton({ onScan }: QrScannerButtonProps) {
                 playsInline
               />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-32 h-32 border-2 border-accent/60 rounded-lg" />
+                <div className="w-40 h-40 border-2 border-accent/70 rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
               </div>
+              {camError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-2 bg-black/70 text-white/80 text-xs p-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-400" />
+                  <div className="font-mono">{camError}</div>
+                  <div className="text-white/50">Type the tag manually below.</div>
+                </div>
+              )}
             </div>
 
             {/* Fuzzy search with suggestions */}
