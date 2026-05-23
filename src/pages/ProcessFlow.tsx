@@ -377,7 +377,13 @@ export default function ProcessFlow() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-border bg-[hsl(220_25%_8%)] overflow-hidden shadow-card relative">
+      <div
+        className={
+          fullscreen
+            ? "fixed inset-0 z-50 bg-[hsl(220_25%_8%)] overflow-hidden shadow-2xl"
+            : "rounded-xl border border-border bg-[hsl(220_25%_8%)] overflow-hidden shadow-card relative"
+        }
+      >
         {/* Zoom controls */}
         <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
           <Button size="icon" variant="secondary" className="h-8 w-8" onClick={() => setZoom((z) => Math.min(z * 1.25, 4))}><ZoomIn className="h-4 w-4" /></Button>
@@ -385,14 +391,17 @@ export default function ProcessFlow() {
           <Button size="icon" variant="secondary" className="h-8 w-8" title="Reset view" onClick={() => { setZoom(1); setPanX(0); setPanY(0); }}>
             <Maximize2 className="h-4 w-4" />
           </Button>
+          <Button size="icon" variant="secondary" className="h-8 w-8" title={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={() => setFullscreen((f) => !f)}>
+            {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
         </div>
         <div className="absolute bottom-3 left-3 z-10 text-[9px] font-mono text-white/30 pointer-events-none">
-          Scroll to zoom · drag to pan · click to inspect
+          Scroll to zoom · drag to pan · click to inspect{fullscreen ? " · press Esc to exit" : ""}
         </div>
 
         <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet"
-             className="w-full h-auto block select-none"
-             style={{ aspectRatio: "16 / 10", cursor: dragRef.current ? "grabbing" : "grab" }}
+             className={fullscreen ? "w-full h-full block select-none" : "w-full h-auto block select-none"}
+             style={{ aspectRatio: fullscreen ? undefined : "16 / 10", cursor: dragRef.current ? "grabbing" : "grab" }}
              onMouseDown={onMouseDown} onMouseMove={onMouseMove}
              onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
              onWheel={onWheel}>
