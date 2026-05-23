@@ -151,7 +151,7 @@ export default function DcsDirectory() {
                 alt={lang === "en" ? p.title_en : p.title_fr}
                 className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
-                referrerPolicy="no-referrer"
+                
               />
             </div>
             <div className="p-4">
@@ -174,4 +174,4 @@ export default function DcsDirectory() {
       </div>
     </div>
   );
-          }
+                    }
