@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useCallback } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { X, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { X, ZoomIn, ZoomOut, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
