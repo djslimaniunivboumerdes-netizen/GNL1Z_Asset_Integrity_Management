@@ -7,29 +7,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useI18n } from "@/contexts/I18nContext";
-import { DCS_PANELS, DCS_SECTIONS, driveImageUrl, getDcsPanel } from "@/data/dcs_panels";
+import { DCS_PANELS, DCS_SECTIONS, getDcsPanel } from "@/data/dcs_panels";
 import { getAllTagsSorted, getTagIndex } from "@/data/dcs_tags";
+import { DriveImg } from "@/components/DriveImg";
 
 
 /** Resilient DCS thumbnail — falls back to a placeholder on error */
 function DcsThumb({ driveId, alt }: { driveId: string; alt: string }) {
-  const [err, setErr] = useState(false);
   return (
     <div className="aspect-video bg-black border-b border-border overflow-hidden flex items-center justify-center">
-      {err ? (
-        <div className="flex flex-col items-center gap-2 text-white/30">
-          <Cpu className="h-8 w-8" />
-          <span className="text-[10px] font-mono uppercase tracking-widest">DCS Screen</span>
-        </div>
-      ) : (
-        <img
-          src={driveImageUrl(driveId)}
-          alt={alt}
-          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-          loading="lazy"
-          onError={() => setErr(true)}
-        />
-      )}
+      <DriveImg
+        driveId={driveId}
+        alt={alt}
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+      />
     </div>
   );
 }
