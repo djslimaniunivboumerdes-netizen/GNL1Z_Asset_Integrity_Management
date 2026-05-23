@@ -54,7 +54,7 @@ export function getDcsPanel(id: string) {
 
 // Drive direct image URL (works for image/jpeg files in publicly viewable Drive folder).
 export function driveImageUrl(driveId: string) {
-  return `https://drive.google.com/thumbnail?id=${driveId}&sz=w1600`;
+  return `https://drive.google.com/uc?export=view&id=${driveId}`;
 }
 
 export function driveViewUrl(driveId: string) {
