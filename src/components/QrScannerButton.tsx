@@ -155,8 +155,15 @@ export function QrScannerButton({ onScan }: QrScannerButtonProps) {
                 playsInline
               />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-32 h-32 border-2 border-accent/60 rounded-lg" />
+                <div className="w-40 h-40 border-2 border-accent/70 rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
               </div>
+              {camError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-2 bg-black/70 text-white/80 text-xs p-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-400" />
+                  <div className="font-mono">{camError}</div>
+                  <div className="text-white/50">Type the tag manually below.</div>
+                </div>
+              )}
             </div>
 
             {/* Fuzzy search with suggestions */}
