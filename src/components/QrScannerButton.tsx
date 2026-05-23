@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback, useMemo } from "react";
-import { ScanLine, X, Search } from "lucide-react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { ScanLine, X, Search, AlertTriangle } from "lucide-react";
+import jsQR from "jsqr";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Fuse from "fuse.js";
