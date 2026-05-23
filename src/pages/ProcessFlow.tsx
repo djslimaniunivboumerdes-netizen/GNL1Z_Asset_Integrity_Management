@@ -276,6 +276,7 @@ export default function ProcessFlow() {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<Node["section"] | "all">("all");
   const [zoom, setZoom] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
   // Pan state
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
