@@ -207,6 +207,19 @@ export default function EquipmentDetail() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <div className="mt-6 flex justify-end">
+        <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2">
+          <Link to={`/equipment/${encodeURIComponent(eq.tag)}/log`}>
+            <ShieldCheck className="h-4 w-4" /> Log maintenance test
+          </Link>
+        </Button>
+      </div>
+
+      <div className="mt-6 space-y-5">
+        <ImageGallery tag={eq.tag} />
+        <MaintenanceTimeline tag={eq.tag} />
+      </div>
     </div>
   );
 }
