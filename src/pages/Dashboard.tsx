@@ -49,6 +49,8 @@ export default function Dashboard() {
         </div>
       </section>
 
+      <div className="pt-8"><TestScheduleWidget /></div>
+
       {/* Modules */}
       <section className="px-4 md:px-10 py-10 max-w-7xl mx-auto">
         <div className="flex items-end justify-between mb-6">
