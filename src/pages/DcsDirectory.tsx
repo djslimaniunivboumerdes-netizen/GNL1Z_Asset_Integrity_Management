@@ -15,29 +15,18 @@ import {
 import { useI18n } from "@/contexts/I18nContext";
 import { DCS_PANELS, DCS_SECTIONS, getDcsPanel } from "@/data/dcs_panels";
 import { getAllTagsSorted, getTagIndex } from "@/data/dcs_tags";
-import { DriveImg } from "@/components/DriveImg";
+import { StorageImg } from "@/components/StorageImg";
 
 /** 
- * Resilient DCS thumbnail — preserves original aspect ratio, no crushing.
- * Uses a 16:9 aspect ratio container so all thumbnails look uniform.
+ * Resilient DCS thumbnail — uses Supabase Storage, no Google Drive.
  */
-function DcsThumb({ driveId, alt }: { driveId: string; alt: string }) {
-  const [loaded, setLoaded] = useState(false);
+function DcsThumb({ storagePath, alt }: { storagePath: string; alt: string }) {
   return (
     <div className="relative bg-black border-b border-border overflow-hidden" style={{ aspectRatio: "16/9" }}>
-      {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-2 text-white/30">
-            <Cpu className="h-6 w-6 animate-pulse" />
-            <span className="text-[10px] font-mono uppercase tracking-widest">Loading…</span>
-          </div>
-        </div>
-      )}
-      <DriveImg
-        driveId={driveId}
+      <StorageImg
+        storagePath={storagePath}
         alt={alt}
         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        onLoad={() => setLoaded(true)}
       />
     </div>
   );
@@ -211,7 +200,7 @@ export default function DcsDirectory() {
             className="group relative overflow-hidden border border-border rounded-lg bg-card hover:border-accent/50 hover:shadow-industrial transition-all"
           >
             <DcsThumb
-              driveId={p.drive_id}
+              storagePath={p.storage_path}
               alt={lang === "en" ? p.title_en : p.title_fr}
             />
             <div className="p-4">
@@ -242,4 +231,4 @@ export default function DcsDirectory() {
       </div>
     </div>
   );
-                }
+}
