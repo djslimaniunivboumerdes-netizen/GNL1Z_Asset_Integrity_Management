@@ -1,5 +1,5 @@
-// Edge function: AI vision OCR to extract DCS instrument tags from a screenshot
-// Uses Lovable AI Gateway (Gemini Flash — strong vision + free tier).
+// detect-dcs-instruments edge function — Gemini Flash vision (aligned with news-feed)
+// Set GEMINI_API_KEY as Supabase secret. No Lovable gateway needed.
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
 const corsHeaders = {
@@ -9,12 +9,18 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 interface ReqBody {
   panel_id: string;
   image_url: string; // public Drive thumbnail
   force?: boolean;
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
 
 Deno.serve(async (req) => {
@@ -36,51 +42,76 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Call Lovable AI Gateway with vision
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: "You are an industrial DCS screenshot reader. Extract every visible instrument tag. Tags follow patterns like FT-1234, PIC-501A, TT-22, LV-100, FIC-1503, PT-501, XV-22, AS-100, HS-200, etc. (loop letters: F/P/T/L/A/X/H + I/T/V/C/S/Y + number + optional suffix). Return ONLY a strict JSON array of unique uppercase tag strings, no prose, no code fences. Example: [\"FT-1503\",\"PIC-501A\",\"TT-22\"]. If none, return [].",
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Extract all instrument tags visible on this DCS screen. Return JSON array only." },
-              { type: "image_url", image_url: { url: image_url } },
-            ],
-          },
-        ],
-      }),
-    });
-
-    if (aiRes.status === 429) return json({ error: "Rate limit. Try again shortly." }, 429);
-    if (aiRes.status === 402) return json({ error: "AI credits exhausted. Add credits in Cloud → AI." }, 402);
-    if (!aiRes.ok) {
-      const txt = await aiRes.text();
-      return json({ error: `AI gateway error: ${txt}` }, 500);
+    // Fetch the image as base64
+    let imageBase64: string;
+    try {
+      const imgRes = await fetch(image_url, { redirect: "follow" });
+      if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status}`);
+      const imgBuffer = await imgRes.arrayBuffer();
+      imageBase64 = btoa(String.fromCharCode(...new Uint8Array(imgBuffer)));
+    } catch (imgErr) {
+      return json({ error: `Failed to fetch image: ${(imgErr as Error).message}` }, 400);
     }
 
-    const aiJson = await aiRes.json();
-    const raw = aiJson.choices?.[0]?.message?.content ?? "[]";
+    // Try Gemini (same approach as news-feed)
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!geminiKey) {
+      return json({ error: "GEMINI_API_KEY not configured" }, 500);
+    }
+
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `You are an industrial DCS screenshot reader. Extract every visible instrument tag.
+Tags follow patterns like FT-1234, PIC-501A, TT-22, LV-100, FIC-1503, PT-501, XV-22, AS-100, HS-200, etc.
+Return ONLY a strict JSON array of unique uppercase tag strings, no prose, no code fences.
+Example: ["FT-1503","PIC-501A","TT-22"]. If none, return [].`,
+                },
+                {
+                  inlineData: {
+                    mimeType: "image/jpeg",
+                    data: imageBase64,
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 1024,
+            temperature: 0.1,
+          },
+        }),
+      }
+    );
+
+    if (!geminiRes.ok) {
+      const t = await geminiRes.text();
+      return json({ error: `Gemini ${geminiRes.status}: ${t.slice(0, 400)}` }, 500);
+    }
+
+    const geminiJson = await geminiRes.json();
+    const raw = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+
     let tags: string[] = [];
     try {
       const cleaned = String(raw).replace(/```json|```/g, "").trim();
       const match = cleaned.match(/\[[\s\S]*\]/);
       tags = JSON.parse(match ? match[0] : cleaned);
-      tags = [...new Set(tags.filter((t) => typeof t === "string" && t.length > 1).map((t) => t.toUpperCase().trim()))];
+      tags = [...new Set(tags.filter((t: unknown) => typeof t === "string" && t.length > 1).map((t: string) => t.toUpperCase().trim()))];
     } catch {
       tags = [];
     }
 
-    // Cache
+    // Cache result
     await fetch(`${SUPABASE_URL}/rest/v1/dcs_detected_instruments`, {
       method: "POST",
       headers: {
@@ -89,7 +120,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
         Prefer: "resolution=merge-duplicates",
       },
-      body: JSON.stringify({ panel_id, tags, model: "google/gemini-2.5-flash" }),
+      body: JSON.stringify({ panel_id, tags, model: "gemini-1.5-flash" }),
     });
 
     return json({ tags, cached: false });
@@ -97,10 +128,3 @@ Deno.serve(async (req) => {
     return json({ error: (e as Error).message }, 500);
   }
 });
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
