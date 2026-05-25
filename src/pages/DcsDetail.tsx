@@ -8,6 +8,7 @@ import { getDcsPanel, dcsImageUrl, dcsImageViewUrl } from "@/data/dcs_panels";
 import { getEquipmentByTag, EQUIPMENT } from "@/data";
 import type { Equipment } from "@/data";
 import { getTagsForPanel } from "@/data/dcs_tags";
+import { getEquipmentTagsFromDcsTags } from "@/data/dcs_equipment_map";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { StorageImg } from "@/components/StorageImg";
@@ -83,19 +84,46 @@ export default function DcsDetail() {
     }
   };
 
+  /**
+   * Build related equipment list:
+   * 1. AI-detected tags mapped to equipment via dcs_equipment_map.ts
+   * 2. Explicit links from panel.related_tags
+   * 3. All equipment in the same process unit
+   */
   const related = useMemo((): Equipment[] => {
     const map = new Map<string, Equipment>();
+
+    // 1 — AI-detected tags mapped to equipment (highest priority)
+    if (tags && tags.length > 0) {
+      const equipmentTags = getEquipmentTagsFromDcsTags(tags);
+      for (const eqTag of equipmentTags) {
+        const eq = getEquipmentByTag(eqTag);
+        if (eq) map.set(eq.tag, eq);
+      }
+    }
+
+    // 2 — Explicitly linked equipment
     for (const tag of panel.related_tags ?? []) {
       const eq = getEquipmentByTag(tag);
       if (eq) map.set(eq.tag, eq);
     }
+
+    // 3 — All equipment in the same process unit
     if (panel.unit) {
       for (const eq of EQUIPMENT) {
         if (eq.unit === panel.unit) map.set(eq.tag, eq);
       }
     }
+
     return Array.from(map.values());
-  }, [panel]);
+  }, [panel, tags]);
+
+  // Separate AI-detected instrument tags from mapped equipment tags
+  const aiTags = tags ?? [];
+  const mappedEquipmentTags = useMemo(() => {
+    if (!tags) return [];
+    return getEquipmentTagsFromDcsTags(tags);
+  }, [tags]);
 
   return (
     <div className="px-4 md:px-8 py-6 md:py-8 max-w-7xl mx-auto">
@@ -150,7 +178,7 @@ export default function DcsDetail() {
                 <ImageOff className="h-12 w-12" />
                 <span className="text-sm font-medium">DCS Image Unavailable</span>
                 <span className="text-[10px] font-mono text-white/30 max-w-xs text-center">
-                  Image not found in Supabase Storage. Please upload to bucket 'equipment-images'.
+                  Image not found in Supabase Storage.
                 </span>
               </div>
             </div>
@@ -164,6 +192,7 @@ export default function DcsDetail() {
         </div>
       </div>
 
+      {/* Detected Instrument Tags */}
       <div className="border border-border rounded-lg bg-card p-5 mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <div className="flex items-center gap-2">
@@ -196,16 +225,20 @@ export default function DcsDetail() {
           </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {tags.map((tg) => {
+            {aiTags.map((tg) => {
               const isHi = highlightTag && tg.toUpperCase() === highlightTag;
+              const hasMapping = mappedEquipmentTags.includes(tg);
               return (
                 <span
                   key={tg}
                   className={`px-2 py-1 rounded border font-mono text-xs ${
                     isHi
                       ? "border-accent bg-accent text-accent-foreground ring-2 ring-accent/40 animate-pulse"
-                      : "border-accent/30 bg-accent/10 text-accent"
+                      : hasMapping
+                        ? "border-green-500/50 bg-green-500/10 text-green-400"
+                        : "border-accent/30 bg-accent/10 text-accent"
                   }`}
+                  title={hasMapping ? "Mapped to equipment" : "No equipment mapping"}
                 >
                   {tg}
                 </span>
@@ -215,9 +248,10 @@ export default function DcsDetail() {
         )}
       </div>
 
+      {/* Related Equipment */}
       <div className="border border-border rounded-lg bg-card p-5 mb-6">
         <h2 className="font-display font-semibold mb-3 text-sm uppercase tracking-wider text-muted-foreground">
-          {t("related")}
+          {lang === "en" ? "Related Equipment" : "Équipement Relié"}
         </h2>
         {related.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -246,4 +280,4 @@ export default function DcsDetail() {
       </Button>
     </div>
   );
-                  }
+                }
