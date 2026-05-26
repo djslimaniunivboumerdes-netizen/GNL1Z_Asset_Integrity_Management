@@ -1,391 +1,277 @@
-import { useState, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PID_SECTIONS, CATEGORY_META, type PIDSection, type PIDCategory } from "@/data/pid-sections";
+import { useI18n } from "@/contexts/I18nContext";
+import { ArrowRight, Thermometer, Gauge, FileText, Activity, X, ChevronRight, FlaskConical } from "lucide-react";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Process steps definition (visual flow nodes)
-// ─────────────────────────────────────────────────────────────────────────────
+function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); }
+
+type Lang = "en" | "fr";
+type Status = "normal" | "alarm" | "standby" | "maintenance";
 
 interface FlowStep {
   id: string;
   label: string;
   sublabel: string;
-  pidId: string | null;       // links to PID_SECTIONS[].id
-  category: PIDCategory | "feed" | "product";
-  temp?: string;              // representative operating temperature
-  pressure?: string;
-  products?: string[];
-  icon: "feed" | "tower" | "exchanger" | "column" | "storage" | "utility";
-  x: number;                  // SVG grid column (0-based)
-  y: number;                  // SVG grid row (0-based)
+  description: Record<Lang, string>;
+  temp: string;
+  pressure: string;
+  status: Status;
+  pidId?: string;
+  icon?: string;
 }
 
+interface PIDSection {
+  id: string;
+  title: Record<Lang, string>;
+  sheets: number;
+}
+
+// ─── Data ───
 const FLOW_STEPS: FlowStep[] = [
   {
     id: "feed",
     label: "Feed Gas",
-    sublabel: "Raw natural gas",
-    pidId: null,
-    category: "feed",
-    temp: "Ambient",
-    pressure: "~65 bar",
-    icon: "feed",
-    x: 0, y: 1,
+    sublabel: "Inlet",
+    description: { en: "Raw natural gas from Arzew field enters the train at ~48 bar, ambient temperature.", fr: "Gaz naturel brut du champ d'Arzew entre dans le train à ~48 bar, température ambiante." },
+    temp: "Ambient", pressure: "48 bar", status: "normal", pidId: "PFD-001",
   },
   {
     id: "co2",
     label: "CO₂ Removal",
-    sublabel: "MDEA Absorber (G507)",
-    pidId: "co2-removal",
-    category: "treatment",
-    temp: "45°C",
-    pressure: "62 bar",
-    products: ["Treated Gas", "Acid Gas"],
-    icon: "tower",
-    x: 1, y: 1,
+    sublabel: "Amine",
+    description: { en: "MEA absorber strips CO₂ to <50 ppmv. Regenerator recovers lean amine.", fr: "L'absorbeur MEA élimine le CO₂ à <50 ppmv. Le régénérateur récupère l'amine pauvre." },
+    temp: "40 °C", pressure: "48 bar", status: "normal", pidId: "PFD-002",
   },
   {
     id: "scrub",
     label: "Scrub Tower",
-    sublabel: "Heavy HC removal (F711)",
-    pidId: "scrub-tower",
-    category: "pre-cooling",
-    temp: "−30°C",
-    pressure: "58 bar",
-    products: ["Lean Gas", "NGL liquid"],
-    icon: "column",
-    x: 2, y: 1,
+    sublabel: "Dehydr / Hg / C5+",
+    description: { en: "Mol-sieve dehydration, mercury guard bed, and heavy-hydrocarbon scrubbing.", fr: "Déshydratation tamis moléculaire, lit de démercurisation, et lavage hydrocarbures lourds." },
+    temp: "−35 °C", pressure: "47 bar", status: "alarm", pidId: "PFD-003",
   },
   {
     id: "main-exchanger",
-    label: "Main PFHE",
-    sublabel: "Cryogenic exchanger (E520)",
-    pidId: "main-exchanger",
-    category: "liquefaction",
-    temp: "−155°C",
-    pressure: "52 bar",
-    products: ["LNG"],
-    icon: "exchanger",
-    x: 3, y: 1,
-  },
-  {
-    id: "mcr",
-    label: "MCR Circuit",
-    sublabel: "Propane pre-cooling (E524–E526)",
-    pidId: "mcr-feed-chilling",
-    category: "liquefaction",
-    temp: "−40°C",
-    pressure: "3–16 bar",
-    products: ["MCR refrigerant"],
-    icon: "exchanger",
-    x: 3, y: 0,
+    label: "MCHE",
+    sublabel: "Liquefaction",
+    description: { en: "Main Cryogenic Heat Exchanger liquefies gas to −162 °C using mixed refrigerant.", fr: "L'échangeur cryogénique principal liquéfie le gaz à −162 °C via réfrigérant mixte." },
+    temp: "−162 °C", pressure: "44 bar", status: "normal", pidId: "PFD-004",
   },
   {
     id: "lng-storage",
     label: "LNG Storage",
-    sublabel: "Cryogenic tank",
-    pidId: null,
-    category: "product" as PIDCategory,
-    temp: "−162°C",
-    pressure: "1.05 bar",
-    icon: "storage",
-    x: 4, y: 1,
+    sublabel: "100 000 m³",
+    description: { en: "Full-containment tank stores LNG at −162 °C before methanier loading.", fr: "Bac full-containment stocke le GNL à −162 °C avant chargement méthanier." },
+    temp: "−162 °C", pressure: "1.1 bar", status: "normal", pidId: "PFD-005",
   },
+];
+
+const MCR_STEPS: FlowStep[] = [
+  {
+    id: "mcr",
+    label: "MCR Loop",
+    sublabel: "Mixed Refrigerant",
+    description: { en: "Closed-loop mixed refrigerant (N₂, C1–C5) provides cooling duty for MCHE.", fr: "Boucle fermée réfrigérant mixte (N₂, C1–C5) fournit le froid pour le MCHE." },
+    temp: "−162 °C → 38 °C", pressure: "1.4–44 bar", status: "maintenance", pidId: "PFD-MCR",
+  },
+];
+
+const FRAC_STEPS: FlowStep[] = [
   {
     id: "demethanizer",
     label: "Demethanizer",
-    sublabel: "CH₄ separation (F721/F722)",
-    pidId: "demethanizer",
-    category: "fractionation",
-    temp: "−93°C",
-    pressure: "30 bar",
-    products: ["Methane", "C₂+ liquid"],
-    icon: "column",
-    x: 2, y: 3,
+    sublabel: "C1 / C2+ split",
+    description: { en: "Overhead methane recycled as fuel; bottoms C2+ to deethanizer.", fr: "Méthane de tête recyclé comme combustible ; fonds C2+ vers déethaniseur." },
+    temp: "−95 °C", pressure: "28 bar", status: "normal", pidId: "PFD-FRAC-01",
   },
   {
     id: "de-ethanizer",
-    label: "De-ethanizer",
-    sublabel: "Ethane separation (F731)",
-    pidId: "de-ethanizer",
-    category: "fractionation",
-    temp: "15°C",
-    pressure: "20 bar",
-    products: ["Ethane", "C₃+ liquid"],
-    icon: "column",
-    x: 3, y: 3,
+    label: "Deethanizer",
+    sublabel: "C2 / C3+ split",
+    description: { en: "Ethane recovered overhead; C3+ sent to depropanizer.", fr: "Éthane récupéré en tête ; C3+ envoyé au dépropaniseur." },
+    temp: "−25 °C", pressure: "28 bar", status: "normal", pidId: "PFD-FRAC-02",
   },
   {
     id: "depropanizer",
     label: "Depropanizer",
-    sublabel: "Propane separation (F741)",
-    pidId: "depropanizer",
-    category: "fractionation",
-    temp: "52°C",
-    pressure: "14 bar",
-    products: ["Propane", "C₄+ liquid"],
-    icon: "column",
-    x: 4, y: 3,
+    sublabel: "C3 / C4+ split",
+    description: { en: "Commercial propane overhead; C4+ to debutanizer.", fr: "Propane commercial en tête ; C4+ vers débutaniseur." },
+    temp: "45 °C", pressure: "18 bar", status: "normal", pidId: "PFD-FRAC-03",
   },
   {
     id: "debutanizer",
     label: "Debutanizer",
-    sublabel: "Butane separation (F751)",
-    pidId: "debutanizer",
-    category: "fractionation",
-    temp: "105°C",
-    pressure: "5 bar",
-    products: ["Butane", "Gasoline"],
-    icon: "column",
-    x: 5, y: 3,
-  },
-  {
-    id: "utilities",
-    label: "Utilities",
-    sublabel: "Instrument air, utility stations",
-    pidId: "utilities",
-    category: "utilities",
-    icon: "utility",
-    x: 5, y: 1,
+    sublabel: "C4 / C5+ split",
+    description: { en: "Butane overhead; natural gasoline bottoms to rundown drum.", fr: "Butane en tête ; essence naturelle fonds vers ballon de soutirage." },
+    temp: "65 °C", pressure: "8 bar", status: "normal", pidId: "PFD-FRAC-04",
   },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Color helpers
-// ─────────────────────────────────────────────────────────────────────────────
+const PID_SECTIONS: PIDSection[] = [
+  { id: "PFD-001", title: { en: "Feed & Decarbonation", fr: "Alimentation & Décarbonatation" }, sheets: 4 },
+  { id: "PFD-002", title: { en: "Amine Regeneration", fr: "Régénération Amine" }, sheets: 3 },
+  { id: "PFD-003", title: { en: "Dehydration & Mercury", fr: "Déshydratation & Démercurisation" }, sheets: 3 },
+  { id: "PFD-004", title: { en: "Liquefaction (MCR)", fr: "Liquéfaction (MCR)" }, sheets: 5 },
+  { id: "PFD-005", title: { en: "LNG Storage & Loading", fr: "Stockage & Chargement GNL" }, sheets: 2 },
+  { id: "PFD-MCR", title: { en: "MCR Refrigeration", fr: "Réfrigération MCR" }, sheets: 4 },
+  { id: "PFD-FRAC-01", title: { en: "Demethanizer", fr: "Déméthaniseur" }, sheets: 2 },
+  { id: "PFD-FRAC-02", title: { en: "Deethanizer", fr: "Déethaniseur" }, sheets: 2 },
+  { id: "PFD-FRAC-03", title: { en: "Depropanizer", fr: "Dépropaniseur" }, sheets: 2 },
+  { id: "PFD-FRAC-04", title: { en: "Debutanizer", fr: "Débutaniseur" }, sheets: 2 },
+];
 
-const CAT_COLORS: Record<string, { bg: string; border: string; text: string; glow: string }> = {
-  feed: { bg: "bg-slate-700", border: "border-slate-500", text: "text-slate-200", glow: "" },
-  treatment: { bg: "bg-emerald-900", border: "border-emerald-500/70", text: "text-emerald-300", glow: "shadow-emerald-500/20" },
-  "pre-cooling": { bg: "bg-sky-900", border: "border-sky-500/70", text: "text-sky-300", glow: "shadow-sky-500/20" },
-  liquefaction: { bg: "bg-indigo-900", border: "border-indigo-500/70", text: "text-indigo-300", glow: "shadow-indigo-500/20" },
-  fractionation: { bg: "bg-amber-900", border: "border-amber-500/70", text: "text-amber-300", glow: "shadow-amber-500/20" },
-  utilities: { bg: "bg-slate-800", border: "border-slate-500/70", text: "text-slate-300", glow: "" },
-  product: { bg: "bg-teal-900", border: "border-teal-400/70", text: "text-teal-300", glow: "shadow-teal-500/20" },
+const STATUS_META: Record<Status, { color: string; bg: string; border: string; label: Record<Lang, string> }> = {
+  normal: { color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", label: { en: "Normal", fr: "Normal" } },
+  alarm: { color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30", label: { en: "Alarm", fr: "Alarme" } },
+  standby: { color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", label: { en: "Standby", fr: "Veille" } },
+  maintenance: { color: "text-slate-400", bg: "bg-slate-500/10", border: "border-slate-500/30", label: { en: "Maintenance", fr: "Maintenance" } },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Process Node card
-// ─────────────────────────────────────────────────────────────────────────────
+const PRODUCTS = [
+  { label: "CH₄", sublabel: "LNG export", color: "text-teal-300 bg-teal-950 border-teal-600/40" },
+  { label: "C₂H₆", sublabel: "Ethane", color: "text-sky-300 bg-sky-950 border-sky-600/40" },
+  { label: "C₃H₈", sublabel: "Propane", color: "text-amber-300 bg-amber-950 border-amber-600/40" },
+  { label: "C₄H₁₀", sublabel: "Butane", color: "text-orange-300 bg-orange-950 border-orange-600/40" },
+  { label: "C₅+", sublabel: "Gasoline", color: "text-pink-300 bg-pink-950 border-pink-600/40" },
+];
 
-interface NodeProps {
-  step: FlowStep;
-  selected: boolean;
-  hasPID: boolean;
-  onSelect: () => void;
-}
+// ─── Sub-components ───
 
-function ProcessNode({ step, selected, hasPID, onSelect }: NodeProps) {
-  const col = CAT_COLORS[step.category] ?? CAT_COLORS.utilities;
+function StepCard({ step, isSelected, onClick, lang }: {
+  step: FlowStep; isSelected: boolean; onClick: () => void; lang: Lang;
+}) {
+  const st = STATUS_META[step.status];
   return (
     <button
-      onClick={onSelect}
-      className={`relative flex flex-col gap-1 rounded-xl border-2 px-4 py-3 text-left transition-all duration-200 w-44
-        ${col.bg} ${selected ? `${col.border} shadow-lg ${col.glow}` : "border-slate-700/60 hover:border-slate-500"}
-        ${hasPID ? "cursor-pointer" : "cursor-default opacity-80"}
-      `}
+      onClick={onClick}
+      className={cn(
+        "relative flex flex-col items-center text-center rounded-xl border px-4 py-3 min-w-[8.5rem] transition-all duration-200 hover:scale-[1.02]",
+        isSelected
+          ? "bg-white/10 border-teal-500/50 shadow-[0_0_20px_rgba(20,184,166,0.15)]"
+          : "bg-white/5 border-white/10 hover:border-white/20"
+      )}
     >
-      <span className={`text-sm font-semibold leading-tight ${col.text}`}>{step.label}</span>
-      <span className="text-xs text-slate-400 leading-snug">{step.sublabel}</span>
-      {step.temp && (
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-[10px] font-mono text-slate-500">{step.temp}</span>
-          {step.pressure && (
-            <span className="text-[10px] font-mono text-slate-600">· {step.pressure}</span>
-          )}
-        </div>
+      {step.pidId && (
+        <span className="absolute top-2 right-2 text-[10px] text-amber-400/80 flex items-center gap-0.5">
+          <FileText size={10} /> P&ID
+        </span>
       )}
-      {hasPID && (
-        <div className="absolute top-2 right-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-        </div>
-      )}
-      {selected && (
-        <div className="absolute inset-0 rounded-xl ring-2 ring-amber-400/60 pointer-events-none" />
-      )}
+      <div className={cn("text-xs font-bold uppercase tracking-wider mb-1", st.color)}>
+        {step.label}
+      </div>
+      <div className="text-[10px] text-slate-400 mb-2">{step.sublabel}</div>
+      <div className="flex items-center gap-3 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1"><Thermometer size={10} /> {step.temp}</span>
+        <span className="flex items-center gap-1"><Gauge size={10} /> {step.pressure}</span>
+      </div>
+      <div className={cn("mt-2 px-2 py-0.5 rounded-full text-[10px] font-medium border", st.bg, st.border, st.color)}>
+        {st.label[lang]}
+      </div>
     </button>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Detail panel
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface DetailPanelProps {
-  step: FlowStep;
-  section: PIDSection | null;
-  onViewPID: () => void;
-  onClose: () => void;
-}
-
-function DetailPanel({ step, section, onViewPID, onClose }: DetailPanelProps) {
-  const col = CAT_COLORS[step.category] ?? CAT_COLORS.utilities;
+function DetailDrawer({ step, section, onClose, lang, onViewPID }: {
+  step: FlowStep; section: PIDSection | null; onClose: () => void; lang: Lang; onViewPID: () => void;
+}) {
+  const st = STATUS_META[step.status];
   return (
-    <div className="flex flex-col gap-4">
-      {/* Header */}
-      <div className={`rounded-xl border p-4 ${col.bg} ${col.border}`}>
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div>
-            <h3 className={`font-bold text-base ${col.text}`}>{step.label}</h3>
-            <p className="text-sm text-slate-400">{step.sublabel}</p>
-          </div>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-400 text-sm">✕</button>
+    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-96 bg-slate-900/98 border-l border-white/10 shadow-2xl backdrop-blur-xl animate-in slide-in-from-right duration-200 flex flex-col">
+      <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <div className="flex items-center gap-2">
+          <FlaskConical size={18} className="text-teal-400" />
+          <h2 className="text-lg font-bold text-white">{step.label}</h2>
         </div>
-        {(step.temp || step.pressure) && (
-          <div className="flex gap-4 text-xs font-mono mt-3">
-            {step.temp && (
+        <button onClick={onClose} className="p-1.5 rounded-md hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className={cn("rounded-lg border px-3 py-2", st.bg, st.border)}>
+          <div className="flex items-center justify-between">
+            <span className={cn("text-sm font-semibold", st.color)}>{st.label[lang]}</span>
+            <span className="text-xs text-slate-500">{step.sublabel}</span>
+          </div>
+        </div>
+
+        <p className="text-sm text-slate-300 leading-relaxed">
+          {step.description[lang]}
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Temperature</div>
+            <div className="text-sm font-semibold text-white">{step.temp}</div>
+          </div>
+          <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Pressure</div>
+            <div className="text-sm font-semibold text-white">{step.pressure}</div>
+          </div>
+        </div>
+
+        {section && (
+          <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Linked P&ID</div>
+            <div className="flex items-center justify-between">
               <div>
-                <span className="text-slate-500 block mb-0.5">Temperature</span>
-                <span className="text-white">{step.temp}</span>
+                <div className="text-sm font-medium text-white">{section.title[lang]}</div>
+                <div className="text-xs text-slate-400">{section.sheets} sheet{section.sheets > 1 ? "s" : ""}</div>
               </div>
-            )}
-            {step.pressure && (
-              <div>
-                <span className="text-slate-500 block mb-0.5">Pressure</span>
-                <span className="text-white">{step.pressure}</span>
-              </div>
-            )}
+              <button
+                onClick={onViewPID}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-300 text-xs font-medium hover:bg-teal-500/25 transition-colors"
+              >
+                <FileText size={12} /> View
+              </button>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Outputs */}
-      {step.products && step.products.length > 0 && (
-        <div>
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Stream Outputs</p>
-          <div className="flex flex-wrap gap-2">
-            {step.products.map((p) => (
-              <span
-                key={p}
-                className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300"
-              >
-                {p}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* P&ID section */}
-      {section ? (
-        <div className="border border-slate-700/60 rounded-xl p-4 bg-slate-900">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-slate-500 uppercase tracking-wider">P&amp;ID Drawing</p>
-            <span className="font-mono text-xs text-amber-400 bg-amber-950/50 border border-amber-700/30 rounded px-2 py-0.5">
-              {section.drawing}
-            </span>
-          </div>
-          <p className="text-sm text-slate-300 leading-relaxed mb-3">{section.description}</p>
-          <div className="flex flex-wrap gap-1 mb-4">
-            {section.equipment.map((tag) => (
-              <span
-                key={tag}
-                className="font-mono text-[10px] text-amber-300/80 bg-amber-950/50 border border-amber-700/30 rounded px-1.5 py-0.5"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-          <button
-            onClick={onViewPID}
-            className="w-full py-2 px-4 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
-            </svg>
-            Open P&amp;ID Viewer
-          </button>
-        </div>
-      ) : (
-        <div className="border border-slate-800 rounded-xl p-4 bg-slate-900/40 text-center text-slate-600 text-sm">
-          No P&amp;ID drawing linked to this step.
-        </div>
-      )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Legend
-// ─────────────────────────────────────────────────────────────────────────────
-
-function Legend() {
-  const cats: Array<[string, string]> = [
-    ["feed", "Feed / Product"],
-    ["treatment", "Feed Treatment"],
-    ["pre-cooling", "Pre-cooling"],
-    ["liquefaction", "Liquefaction"],
-    ["fractionation", "Fractionation"],
-    ["utilities", "Utilities"],
-  ];
-  return (
-    <div className="flex flex-wrap gap-3">
-      {cats.map(([cat, label]) => {
-        const col = CAT_COLORS[cat];
-        return (
-          <div key={cat} className="flex items-center gap-1.5">
-            <div className={`w-3 h-3 rounded border ${col.bg} ${col.border}`} />
-            <span className="text-xs text-slate-400">{label}</span>
-          </div>
-        );
-      })}
-      <div className="flex items-center gap-1.5 ml-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-        <span className="text-xs text-slate-400">Has P&amp;ID</span>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Process Flow Layout
-// Uses a manual flow layout with connector lines drawn as SVG
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MAIN_FLOW_IDS = ["feed", "co2", "scrub", "main-exchanger", "lng-storage"];
-const MCR_ROW_IDS = ["mcr"];
-const FRAC_ROW_IDS = ["demethanizer", "de-ethanizer", "depropanizer", "debutanizer"];
-
-export default function ProcessFlow() {
+// ─── Main component ───
+export default function LNGProcessFlow() {
   const navigate = useNavigate();
+  const { lang: rawLang } = useI18n();
+  const lang: Lang = rawLang?.startsWith("fr") ? "fr" : "en";
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const stepById = Object.fromEntries(FLOW_STEPS.map((s) => [s.id, s]));
-  const sectionByPIDId = Object.fromEntries(PID_SECTIONS.map((s) => [s.id, s]));
+  const stepById = useMemo(() => Object.fromEntries([...FLOW_STEPS, ...MCR_STEPS, ...FRAC_STEPS].map((s) => [s.id, s])), []);
+  const sectionByPIDId = useMemo(() => Object.fromEntries(PID_SECTIONS.map((s) => [s.id, s])), []);
 
   const selectedStep = selectedId ? stepById[selectedId] : null;
-  const selectedSection = selectedStep?.pidId ? sectionByPIDId[selectedStep.pidId] ?? null : null;
+  const selectedSection = selectedStep?.pidId ? (sectionByPIDId[selectedStep.pidId] ?? null) : null;
 
   const handleViewPID = useCallback(() => {
     navigate("/pid-viewer");
   }, [navigate]);
 
-  const renderRow = (ids: string[], label?: string) => (
+  const renderRow = (steps: FlowStep[], label?: string) => (
     <div className="flex flex-col gap-2">
       {label && (
-        <span className="text-xs text-slate-600 uppercase tracking-widest pl-1">{label}</span>
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <span className="w-6 h-px bg-slate-700" />
+          {label}
+          <span className="flex-1 h-px bg-slate-800" />
+        </div>
       )}
-      <div className="flex items-center gap-0">
-        {ids.map((id, idx) => {
-          const step = stepById[id];
-          const isLast = idx === ids.length - 1;
+      <div className="flex flex-wrap items-stretch gap-3">
+        {steps.map((step, idx) => {
+          const isLast = idx === steps.length - 1;
           return (
-            <div key={id} className="flex items-center">
-              <ProcessNode
+            <div key={step.id} className="flex items-center gap-2">
+              <StepCard
                 step={step}
-                selected={selectedId === id}
-                hasPID={!!step.pidId}
-                onSelect={() => setSelectedId(selectedId === id ? null : id)}
+                isSelected={selectedId === step.id}
+                onClick={() => setSelectedId((prev) => (prev === step.id ? null : step.id))}
+                lang={lang}
               />
-              {!isLast && (
-                <div className="flex items-center w-8 shrink-0">
-                  <div className="flex-1 h-0.5 bg-slate-700" />
-                  <svg className="w-3 h-3 text-slate-600 shrink-0" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M3 8l5-5v3h6v4H8v3L3 8z" />
-                  </svg>
-                </div>
-              )}
+              {!isLast && <ArrowRight size={14} className="text-slate-600 shrink-0" />}
             </div>
           );
         })}
@@ -393,154 +279,101 @@ export default function ProcessFlow() {
     </div>
   );
 
-  // Products derived from fractionation
-  const PRODUCTS = [
-    { label: "CH₄", sublabel: "LNG export", color: "text-teal-300 bg-teal-900 border-teal-600/60" },
-    { label: "C₂H₆", sublabel: "Ethane", color: "text-sky-300 bg-sky-900 border-sky-600/60" },
-    { label: "C₃H₈", sublabel: "Propane", color: "text-amber-300 bg-amber-900 border-amber-600/60" },
-    { label: "C₄H₁₀", sublabel: "Butane", color: "text-orange-300 bg-orange-900 border-orange-600/60" },
-    { label: "C₅+", sublabel: "Gasoline", color: "text-pink-300 bg-pink-900 border-pink-600/60" },
-  ];
-
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* ── Header ── */}
-      <div className="border-b border-slate-800 bg-slate-900/50 sticky top-0 z-10 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
-            <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-white tracking-tight">Process Flow</h1>
-            <p className="text-sm text-slate-500">LNG Liquefaction Train — GL1/Z Sonatrach</p>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => navigate("/pid-viewer")}
-              className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors"
-            >
-              → Open P&amp;ID Browser
-            </button>
-          </div>
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <Activity size={20} className="text-teal-400" />
+            {lang === "en" ? "Process Overview" : "Vue d'Ensemble du Procédé"}
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            {lang === "en"
+              ? "LNG Liquefaction Train — GL1/Z Sonatrach. High-level block diagram with operating conditions."
+              : "Train de Liquéfaction GNL — GL1/Z Sonatrach. Diagramme de blocs avec conditions de fonctionnement."}
+          </p>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row gap-8">
-        {/* ── Flow diagram ── */}
-        <div className="flex-1 flex flex-col gap-8 overflow-x-auto">
-          {/* Legend */}
-          <Legend />
-
-          {/* MCR row (above main flow) */}
-          <div className="flex flex-col gap-1">
-            <div className="pl-[calc(3*12rem+3*2rem+0.5rem)]">
-              {renderRow(MCR_ROW_IDS, "MCR Refrigerant")}
-            </div>
-            {/* Connector from MCR down to Main Exchanger position */}
-            <div className="pl-[calc(3*12rem+3*2rem+5rem)] h-6 flex items-start">
-              <div className="w-0.5 h-6 bg-slate-700" />
-            </div>
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 text-xs text-slate-400">
+        {Object.entries(STATUS_META).map(([key, meta]) => (
+          <div key={key} className="flex items-center gap-1.5">
+            <span className={cn("w-2 h-2 rounded-full", meta.bg.replace("/10", ""))} style={{ background: key === "normal" ? "#34d399" : key === "alarm" ? "#f87171" : key === "standby" ? "#fbbf24" : "#94a3b8" }} />
+            <span>{meta.label[lang]}</span>
           </div>
+        ))}
+      </div>
 
-          {/* Main process flow */}
-          {renderRow(MAIN_FLOW_IDS, "Main Process Train")}
+      {/* Diagram */}
+      <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 sm:p-6 space-y-6">
+        {/* MCR row */}
+        {renderRow(MCR_STEPS, lang === "en" ? "MCR Refrigerant" : "Réfrigérant MCR")}
 
-          {/* Vertical drop from Scrub Tower to Fractionation */}
-          <div className="flex items-start">
-            <div className="w-[calc(2*12rem+2*2rem+5.5rem)] shrink-0" />
-            <div className="flex flex-col items-center gap-0.5">
-              <div className="w-0.5 h-6 bg-slate-700" />
-              <div className="flex items-center gap-1">
-                <div className="h-0.5 w-6 bg-slate-700" />
-                <span className="text-[10px] text-slate-600 font-mono whitespace-nowrap">NGL bottoms</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Fractionation row */}
-          {renderRow(FRAC_ROW_IDS, "Fractionation Train")}
-
-          {/* Product outputs */}
-          <div className="flex flex-col gap-2">
-            <span className="text-xs text-slate-600 uppercase tracking-widest pl-1">Final Products</span>
-            <div className="flex flex-wrap gap-3">
-              {PRODUCTS.map((p) => (
-                <div
-                  key={p.label}
-                  className={`flex flex-col items-center rounded-xl border px-4 py-2 ${p.color}`}
-                >
-                  <span className="font-mono font-bold text-sm">{p.label}</span>
-                  <span className="text-[10px] opacity-70">{p.sublabel}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Utility node placed below */}
-          <div className="flex flex-col gap-1 border-t border-slate-800 pt-6">
-            <span className="text-xs text-slate-600 uppercase tracking-widest pl-1 mb-2">Utilities</span>
-            <ProcessNode
-              step={stepById["utilities"]}
-              selected={selectedId === "utilities"}
-              hasPID
-              onSelect={() => setSelectedId(selectedId === "utilities" ? null : "utilities")}
-            />
-          </div>
+        {/* Connector */}
+        <div className="flex items-center gap-2 pl-[4.5rem]">
+          <div className="w-px h-6 bg-slate-700" />
+          <ChevronRight size={12} className="text-slate-600 -rotate-90" />
+          <span className="text-[10px] text-slate-500">{lang === "en" ? "Refrigerant to MCHE" : "Réfrigérant vers MCHE"}</span>
         </div>
 
-        {/* ── Detail Panel ── */}
-        <div className="w-full lg:w-80 shrink-0">
-          {selectedStep ? (
-            <DetailPanel
-              step={selectedStep}
-              section={selectedSection}
-              onViewPID={handleViewPID}
-              onClose={() => setSelectedId(null)}
-            />
-          ) : (
-            <div className="border border-slate-800 rounded-xl p-6 bg-slate-900/40 text-center flex flex-col items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
-                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zm-7.518-.267A8.25 8.25 0 1120.25 10.5M8.288 14.212A5.25 5.25 0 1117.25 10.5" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-slate-400 font-medium">Select a process step</p>
-                <p className="text-xs text-slate-600 mt-1">
-                  Click any node to see operating conditions and linked P&amp;ID drawings.
-                  Nodes with a pulsing amber dot have an associated P&amp;ID.
-                </p>
-              </div>
-            </div>
-          )}
+        {/* Main flow */}
+        {renderRow(FLOW_STEPS, lang === "en" ? "Main Process Train" : "Train Principal")}
 
-          {/* Process summary stats */}
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            {[
-              { label: "Feed Temp", value: "Ambient", unit: "" },
-              { label: "LNG Temp", value: "−162", unit: "°C" },
-              { label: "Train", value: "200", unit: "" },
-              { label: "P&IDs", value: PID_SECTIONS.length.toString(), unit: "sheets" },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-lg bg-slate-900 border border-slate-800 p-3"
-              >
-                <p className="text-xs text-slate-600 mb-1">{stat.label}</p>
-                <p className="text-lg font-bold text-white font-mono">
-                  {stat.value}
-                  <span className="text-xs text-slate-500 font-sans ml-1">{stat.unit}</span>
-                </p>
+        {/* Vertical drop */}
+        <div className="flex items-center gap-2 pl-[28rem]">
+          <div className="w-px h-6 bg-slate-700" />
+          <ChevronRight size={12} className="text-slate-600 -rotate-90" />
+          <span className="text-[10px] text-slate-500">NGL bottoms</span>
+        </div>
+
+        {/* Fractionation */}
+        {renderRow(FRAC_STEPS, lang === "en" ? "Fractionation Train" : "Train de Fractionnement")}
+
+        {/* Products */}
+        <div className="pt-2">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+            <span className="w-6 h-px bg-slate-700" />
+            {lang === "en" ? "Final Products" : "Produits Finaux"}
+            <span className="flex-1 h-px bg-slate-800" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {PRODUCTS.map((p) => (
+              <div key={p.label} className={cn("flex items-center gap-2 px-3 py-2 rounded-lg border text-xs", p.color)}>
+                <span className="font-bold">{p.label}</span>
+                <span className="opacity-70">{p.sublabel}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: lang === "en" ? "Feed Temp" : "Temp. Alim.", value: "Ambient", unit: "" },
+          { label: lang === "en" ? "LNG Temp" : "Temp. GNL", value: "−162", unit: "°C" },
+          { label: lang === "en" ? "Train" : "Train", value: "200", unit: "t/d" },
+          { label: lang === "en" ? "P&IDs" : "P&IDs", value: PID_SECTIONS.length.toString(), unit: lang === "en" ? "sheets" : "feuilles" },
+        ].map((stat) => (
+          <div key={stat.label} className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{stat.label}</div>
+            <div className="text-lg font-bold text-white">{stat.value}<span className="text-xs font-normal text-slate-400 ml-1">{stat.unit}</span></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Detail drawer */}
+      {selectedStep && (
+        <DetailDrawer
+          step={selectedStep}
+          section={selectedSection}
+          onClose={() => setSelectedId(null)}
+          lang={lang}
+          onViewPID={handleViewPID}
+        />
+      )}
     </div>
   );
-}
+            }
