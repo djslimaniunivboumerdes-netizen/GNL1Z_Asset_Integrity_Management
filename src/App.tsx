@@ -14,7 +14,6 @@ import EquipmentDetail from "./pages/EquipmentDetail";
 import DcsDirectory from "./pages/DcsDirectory";
 import DcsDetail from "./pages/DcsDetail";
 import Manuals from "./pages/Manuals";
-import SmartProcessFlow from "./pages/SmartProcessFlow";
 import ProcessFlow from "./pages/ProcessFlow";
 import News from "./pages/News";
 import Author from "./pages/Author";
