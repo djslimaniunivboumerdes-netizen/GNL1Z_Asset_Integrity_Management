@@ -43,7 +43,6 @@ const App = () => (
                   <Route path="/dcs" element={<DcsDirectory />} />
                   <Route path="/dcs/:id" element={<DcsDetail />} />
                   <Route path="/manuals" element={<Manuals />} />
-                  <Route path="/smart-flow" element={<SmartProcessFlow />} />
                   <Route path="/flow" element={<ProcessFlow />} />
                   <Route path="/news" element={<News />} />
                   <Route path="/author" element={<Author />} />
