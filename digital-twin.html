@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>SONATRACH GL1/Z · LNG Digital Twin</title>
+    <!-- Tailwind + Font Awesome + Google Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <!-- Chart.js optional for historical KPIs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        body { background: #f1f5f9; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+
+        /* custom dashboard cards */
+        .kpi-card { transition: all 0.2s; }
+        .process-node { transition: all 0.15s ease; cursor: pointer; }
+        .process-node:hover { filter: drop-shadow(0 0 6px #0284c7); transform: scale(1.02); }
+        
+        /* refrigeration loop animation */
+        @keyframes flowAnim {
+            0% { stroke-dashoffset: 24; }
+            100% { stroke-dashoffset: 0; }
+        }
+        .refrig-animate {
+            stroke-dasharray: 8 6;
+            animation: flowAnim 0.6s linear infinite;
+        }
+
+        /* interlock cards */
+        .interlock-card {
+            transition: all 0.2s;
+            border-left-width: 3px;
+        }
+        .interlock-ok { border-left-color: #10b981; background: #ecfdf5; }
+        .interlock-warning { border-left-color: #f59e0b; background: #fffbeb; }
+        .interlock-critical { border-left-color: #ef4444; background: #fef2f2; }
+
+        .detail-panel-tab { cursor: pointer; transition: 0.1s; }
+        .detail-panel-tab.active { border-bottom: 2px solid #0891b2; color: #0891b2; font-weight: 600; }
+    </style>
+</head>
+<body class="h-screen overflow-hidden">
+
+<div class="flex flex-col h-screen bg-slate-100">
+    <!-- Header with Sonatrach branding + live KPIs (simulated) -->
+    <header class="bg-white border-b border-slate-200 shadow-sm px-6 py-2 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-red-700 rounded-lg flex items-center justify-center">
+                <i class="fa-solid fa-industry text-white text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-800 tracking-tight">SONATRACH GL1/Z · DIGITAL TWIN</h1>
+                <p class="text-xs text-slate-500">Liquefaction Train · Real‑time DCS Integration | Arzew LNG Complex</p>
+            </div>
+        </div>
+        <!-- static KPI row (real data loaded from database later) -->
+        <div class="flex flex-wrap gap-3 bg-slate-50 px-4 py-1.5 rounded-xl border shadow-sm">
+            <div class="flex items-center gap-2"><i class="fa-solid fa-wind text-cyan-600"></i><span class="text-sm font-medium">CO₂ Out</span><span id="kpi-co2" class="font-bold text-green-700">98.9</span><span class="text-xs">ppm</span></div>
+            <div class="w-px h-6 bg-slate-300"></div>
+            <div class="flex items-center gap-2"><i class="fa-regular fa-snowflake text-blue-500"></i><span class="text-sm">MCHE outlet</span><span id="kpi-mche-temp" class="font-bold text-indigo-700">-161.2</span><span class="text-xs">°C</span></div>
+            <div class="w-px h-6 bg-slate-300"></div>
+            <div class="flex items-center gap-2"><i class="fa-solid fa-gauge-high text-emerald-600"></i><span class="text-sm">LNG prod</span><span id="kpi-lng-flow" class="font-bold">1310</span><span class="text-xs">t/h</span></div>
+            <div class="w-px h-6 bg-slate-300"></div>
+            <div class="flex items-center gap-2"><i class="fa-solid fa-chart-line text-amber-600"></i><span class="text-sm">Plant eff.</span><span id="kpi-eff" class="font-bold">97.2</span><span class="text-xs">%</span></div>
+        </div>
+        <div class="flex gap-2">
+            <button id="animateBtn" class="bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 shadow transition"><i class="fa-solid fa-play"></i> MCR Loop</button>
+            <div class="text-xs bg-slate-100 px-3 py-1.5 rounded-full text-slate-600 border"><i class="fa-regular fa-clock"></i> DCS Live (30s)</div>
+        </div>
+    </header>
+
+    <!-- Main three-column layout -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- LEFT: Equipment hierarchy + dynamic tree -->
+        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shadow-sm overflow-y-auto">
+            <div class="px-4 py-3 border-b bg-slate-50 font-semibold flex justify-between items-center">
+                <span><i class="fa-solid fa-diagram-project text-cyan-600"></i> Equipment hierarchy</span>
+                <span class="text-xs bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full">P&amp;ID linked</span>
+            </div>
+            <div id="equipment-tree" class="p-3 space-y-2 flex-1"></div>
+            <div class="p-3 border-t text-xs text-slate-500 bg-slate-50">
+                <div><i class="fa-regular fa-circle-check text-cyan-600"></i> <span class="font-medium">Legend:</span> <span class="text-green-600">● running</span> <span class="text-yellow-600">● standby</span> <span class="text-red-600">● alarm</span></div>
+                <div class="mt-1">Click any equipment → opens detail panel & P&amp;ID preview</div>
+            </div>
+        </aside>
+
+        <!-- MIDDLE: SVG PFD + Refrigeration animation -->
+        <div class="flex-1 bg-white shadow-inner overflow-auto relative">
+            <div class="relative w-full min-h-[600px]" id="pfd-container">
+                <svg id="pfd-svg" class="w-full h-full" viewBox="0 0 1200 750" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="1200" height="750" fill="#fefcf5" stroke="#cbd5e1" stroke-width="1"/>
+                    <defs>
+                        <marker id="arrowBlue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><polygon points="0 0, 6 3, 0 6" fill="#2563eb"/></marker>
+                        <filter id="glow"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                    </defs>
+                    <!-- main gas path -->
+                    <g stroke="#1e40af" stroke-width="2.8" fill="none" marker-end="url(#arrowBlue)">
+                        <path d="M 80 190 L 150 190 L 220 220 L 330 220 L 380 200 L 440 195 L 520 180 L 580 170 L 660 150 L 740 140 L 820 140"/>
+                    </g>
+                    <!-- propane / MCR loops -->
+                    <path d="M 410 380 L 490 400 L 570 350 L 630 330" stroke="#f97316" stroke-dasharray="6 5" stroke-width="2" fill="none"/>
+                    <path id="mcrAnimated" d="M 730 230 L 800 260 L 880 300 L 920 360 L 870 420 L 800 440 L 710 410 L 660 360 L 690 290" stroke="#8b5cf6" stroke-width="2.5" fill="none" class="refrig-animate"/>
+                </svg>
+                <!-- tooltip floating element will be placed in JS -->
+            </div>
+            <div class="absolute bottom-2 left-2 bg-black/60 text-white text-[11px] px-3 py-1 rounded-full backdrop-blur-sm">PFD – GL1/Z Train 500 – Integrated DCS layer</div>
+        </div>
+
+        <!-- RIGHT: Equipment details + Interlock matrix -->
+        <aside class="w-96 bg-white border-l border-slate-200 flex flex-col shadow-sm overflow-y-auto">
+            <div class="px-4 py-3 border-b bg-slate-50 font-semibold flex justify-between items-center">
+                <span><i class="fa-regular fa-display text-cyan-600"></i> Equipment &amp; DCS Panel</span>
+                <span class="text-xs bg-cyan-100 px-2 py-0.5 rounded-full"><i class="fa-regular fa-chart-line"></i> historian ready</span>
+            </div>
+            <div id="detail-content" class="p-4 flex-1 overflow-auto">
+                <div class="text-center text-slate-400 mt-16"><i class="fa-regular fa-diagram-cells fa-3x mb-3 opacity-40"></i><p>Select any PFD tag<br>or hierarchy entry →</p></div>
+            </div>
+            <!-- Interlock visualizer (cause & effect) -->
+            <div class="border-t border-slate-200 bg-slate-50 p-4">
+                <div class="flex justify-between mb-2"><h3 class="font-semibold text-sm flex gap-1"><i class="fa-solid fa-shield-haltered text-red-500"></i>ESD interlocks (Cause &amp; Effect)</h3><span class="text-[10px] bg-white px-2 py-0.5 rounded-full">live matrix</span></div>
+                <div id="interlock-list" class="space-y-2 max-h-56 overflow-y-auto pr-1"></div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script>
+    // --------------------------------------------------------------
+    // Equipment database (based on MANUAL tags + actual CSV data)
+    // --------------------------------------------------------------
+    const equipmentNodes = [
+        { id: "n1", tag: "101-F502", name: "MEA Absorber", type: "column", x: 220, y: 210, status: "running", section: "Pretreatment", pressure: "41.2 barg", temp: "38°C", co2_out: "9 ppm", pid_ref: "E501 F501 ..." },
+        { id: "n2", tag: "X02-R03.10", name: "Mol. Sieve Dryer", type: "vessel", x: 350, y: 210, status: "running", section: "Dehydration", dewpoint: "-67°C", pressure: "39.1 barg" },
+        { id: "n3", tag: "X04-F-07.11", name: "Scrub Tower", type: "column", x: 480, y: 185, status: "running", section: "Separation", c5plus: "0.018%", pressure: "38.2 barg" },
+        { id: "n4", tag: "X04-E-05.22", name: "Propane Chiller MP", type: "exchanger", x: 600, y: 175, status: "running", section: "Refrigeration", outlet: "-1°C", duty: "3.02 Gcal/h" },
+        { id: "n5", tag: "X06-E-05.20", name: "Main Cryo Exchanger (MCHE)", type: "exchanger", x: 720, y: 150, status: "running", section: "Liquefaction", lng_temp: "-161.2°C", mcr_temp: "-148°C" },
+        { id: "n6", tag: "K-503", name: "MCR Compressor", type: "compressor", x: 810, y: 260, status: "running", section: "Refrigeration", speed: "4875 rpm", discharge: "44.2 barg" },
+        { id: "n7", tag: "K-502", name: "Propane Compressor", type: "compressor", x: 680, y: 330, status: "standby", section: "Refrigeration", load: "78%" },
+        { id: "n8", tag: "X06-G-07.83", name: "Nitrogen Flash Drum", type: "vessel", x: 860, y: 145, status: "running", section: "Liquefaction", pressure: "0.37 barg", liquid_flow: "1280 t/h" },
+        { id: "n9", tag: "Storage 901", name: "LNG Tank 901", type: "storage", x: 960, y: 150, status: "running", section: "Storage", level: "54%", boiloff: "2.3%" }
+    ];
+
+    // Equipment hierarchy from official section breakdown
+    const hierarchy = {
+        "Pretreatment (CO₂ Removal)": ["101-F502", "X01-J-503", "X01-E-506"],
+        "Dehydration & Mercury": ["X02-R03.10", "X02-R03.12", "X02-P-03.12A"],
+        "Heavy Ends / Scrub Tower": ["X04-F-07.11", "X04-E-05.40", "X04-G-07.14"],
+        "Refrigeration (Propane / MCR)": ["K-502", "K-503", "X04-E-05.22", "X04-E-05.24"],
+        "Liquefaction & MCHE": ["X06-E-05.20", "X06-G-07.83", "X06-E-05.30"],
+        "Storage & Loading": ["Storage 901", "Storage 902", "X06-J-10.20"]
+    };
+
+    // Interlock database (real cause & effect from doc)
+    let interlocks = [
+        { name: "PSHH-112 (Deethanizer high pressure)", status: "ok", action: "closes XV-X07-118 / steam trip" },
+        { name: "LSHH-X06-75 (N2 Flash Drum HiHi)", status: "ok", action: "shutdown LNG pumps & close TV-X06-12" },
+        { name: "PSLL-X00-00 (Seawater low low)", status: "ok", action: "full train ESD + compressor trip" },
+        { name: "LALL-X04-134 (Scrub tower low level)", status: "warning", action: "closes JV-X04-125, vent to flare" },
+        { name: "TSH-X02-220 (Regen gas high temp)", status: "critical", action: "shutdown regeneration blower" }
+    ];
+
+    function renderPFD() {
+        const svgGroup = document.getElementById('pfd-svg').querySelector('g#dynamic-nodes') || document.getElementById('pfd-svg').appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'g'));
+        svgGroup.setAttribute('id','dynamic-nodes');
+        svgGroup.innerHTML = '';
+        equipmentNodes.forEach(node => {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+            g.setAttribute('class', 'process-node');
+            g.setAttribute('data-tag', node.tag);
+            let statusColor = node.status === 'running' ? '#10b981' : (node.status === 'standby' ? '#eab308' : '#ef4444');
+            let shape = node.type === 'column' ? `<rect x="-18" y="-28" width="36" height="56" rx="4" fill="#fff" stroke="${statusColor}" stroke-width="2.5" filter="url(#glow)"/>` :
+                        node.type === 'exchanger' ? `<rect x="-20" y="-15" width="40" height="30" rx="8" fill="#fff" stroke="${statusColor}" stroke-width="2.5"/>` :
+                        node.type === 'compressor' ? `<polygon points="-18,-18 18,-18 22,0 18,18 -18,18 -22,0" fill="#fff" stroke="${statusColor}" stroke-width="2.5"/>` :
+                        `<circle r="22" fill="#fff" stroke="${statusColor}" stroke-width="2.5" filter="url(#glow)"/>`;
+            g.innerHTML = shape + `<text x="0" y="35" text-anchor="middle" fill="#1e293b" font-size="9" font-family="monospace">${node.tag}</text>`;
+            g.onclick = (e) => showEquipmentDetails(node.tag);
+            svgGroup.appendChild(g);
+        });
+    }
+
+    function showEquipmentDetails(tag) {
+        const node = equipmentNodes.find(n => n.tag === tag);
+        if (!node) return;
+        const detailDiv = document.getElementById('detail-content');
+        detailDiv.innerHTML = `
+        <div class="border-l-4 border-cyan-600 pl-3 mb-4"><div class="flex justify-between"><h2 class="font-bold text-lg">${node.tag}</h2><span class="bg-slate-200 px-2 rounded-full text-xs">${node.section}</span></div>
+        <p class="text-slate-500 text-sm">${node.name}</p><span class="inline-flex items-center gap-1 mt-1"><span class="w-2 h-2 rounded-full ${node.status === 'running' ? 'bg-green-500' : 'bg-yellow-500'}"></span><span class="text-xs uppercase">${node.status}</span></span></div>
+        <div class="space-y-2 text-sm">${node.pressure ? `<div class="flex justify-between border-b pb-1"><span class="text-slate-500">Pressure</span><span class="font-mono">${node.pressure}</span></div>` : ''}
+        ${node.temp ? `<div class="flex justify-between border-b pb-1"><span>T°</span><span>${node.temp}</span></div>` : ''}
+        ${node.co2_out ? `<div class="flex justify-between border-b pb-1"><span>CO₂ outlet</span><span class="text-emerald-600">${node.co2_out}</span></div>` : ''}
+        ${node.dewpoint ? `<div><span>Dewpoint</span><span>${node.dewpoint}</span></div>` : ''}</div>
+        <div class="mt-4 bg-slate-100 p-3 rounded-lg border"><div class="font-semibold text-slate-700 text-sm flex items-center gap-2"><i class="fa-regular fa-display"></i> DCS mimic (${node.tag})</div>
+        <div class="grid grid-cols-2 gap-3 mt-2 text-xs"><div class="bg-white p-2 rounded"><span>Setpoint PV</span><div class="font-mono text-indigo-700">41.3 barg</div></div>
+        <div class="bg-white p-2 rounded"><span>Valve MV</span><div class="font-mono text-cyan-700">67%</div></div>
+        <div class="bg-white p-2 rounded"><span>Interlock status</span><div class="text-green-600">OK</div></div>
+        <div class="bg-white p-2 rounded"><span>P&amp;ID link</span><div class="text-cyan-600"><i class="fa-regular fa-diagram-project"></i> <a href="#" onclick="return false;">View sheet</a></div></div></div></div>
+        <div class="mt-3 text-right"><i class="fa-regular fa-file-pdf text-rose-600"></i> <a href="#" class="text-xs text-cyan-700">Extract from operation manual</a></div>`;
+    }
+
+    function buildHierarchy() {
+        const treeDiv = document.getElementById('equipment-tree');
+        treeDiv.innerHTML = '';
+        for (const [section, tags] of Object.entries(hierarchy)) {
+            let sectDiv = document.createElement('div');
+            sectDiv.className = 'mb-2';
+            sectDiv.innerHTML = `<div class="font-semibold text-slate-700 text-sm flex items-center gap-1"><i class="fa-regular fa-folder-open"></i> ${section}</div>`;
+            let listDiv = document.createElement('div');
+            listDiv.className = 'ml-3 space-y-1 mt-1';
+            tags.forEach(t => {
+                let eq = equipmentNodes.find(n => n.tag === t);
+                let st = eq ? eq.status : 'unknown';
+                let color = st === 'running' ? 'text-green-600' : (st === 'standby' ? 'text-yellow-600' : 'text-red-500');
+                listDiv.innerHTML += `<div class="text-xs text-slate-600 p-1.5 hover:bg-slate-100 rounded cursor-pointer flex justify-between items-center" onclick="showEquipmentDetails('${t}')">
+                    <span><i class="fa-regular fa-cube mr-1 ${color}"></i> ${t}</span><span class="text-slate-400 text-[10px]">${eq ? eq.name.substring(0,22) : ''}</span></div>`;
+            });
+            sectDiv.appendChild(listDiv);
+            treeDiv.appendChild(sectDiv);
+        }
+    }
+
+    function renderInterlocks() {
+        const container = document.getElementById('interlock-list');
+        container.innerHTML = '';
+        interlocks.forEach(il => {
+            let klass = il.status === 'ok' ? 'interlock-ok' : (il.status === 'warning' ? 'interlock-warning' : 'interlock-critical');
+            let icon = il.status === 'ok' ? '<i class="fa-regular fa-circle-check text-green-600"></i>' : (il.status === 'warning' ? '<i class="fa-regular fa-triangle-exclamation text-yellow-500"></i>' : '<i class="fa-regular fa-circle-exclamation text-red-500"></i>');
+            container.innerHTML += `
+            <div class="interlock-card ${klass} p-2 rounded-md border bg-white shadow-sm">
+                <div class="flex justify-between items-start"><div class="font-mono text-xs font-bold">${il.name}</div><div>${icon}</div></div>
+                <div class="text-[11px] text-slate-500 mt-1">Action: ${il.action}</div>
+                <div class="mt-1 w-full bg-slate-200 rounded-full h-1.5"><div class="bg-${il.status === 'ok' ? 'emerald' : (il.status === 'warning' ? 'yellow' : 'red')}-500 h-1.5 rounded-full" style="width: ${il.status === 'ok' ? '100%' : (il.status === 'warning' ? '70%' : '30%')}"></div></div>
+            </div>`;
+        });
+    }
+
+    // Simulate real-time DCS update (live KPI)
+    function startDataSimulation() {
+        setInterval(() => {
+            let co2 = (8 + Math.random() * 3).toFixed(1);
+            let temp = (-161.8 + Math.random() * 0.8).toFixed(1);
+            let flow = 1280 + Math.floor(Math.random() * 70);
+            let eff = (96.2 + Math.random() * 1.5).toFixed(1);
+            document.getElementById('kpi-co2').innerText = co2;
+            document.getElementById('kpi-mche-temp').innerText = temp;
+            document.getElementById('kpi-lng-flow').innerText = flow;
+            document.getElementById('kpi-eff').innerText = eff;
+            // random interlock fluctuation for demonstration
+            if (Math.random() < 0.08) {
+                interlocks[Math.floor(Math.random() * interlocks.length)].status = "warning";
+                renderInterlocks();
+                setTimeout(() => { interlocks.forEach(i => i.status = "ok"); renderInterlocks(); }, 5000);
+            }
+        }, 6000);
+    }
+
+    // Animate MCR loop toggle
+    let animateFlag = true;
+    document.getElementById('animateBtn').onclick = () => {
+        const mcrPath = document.getElementById('mcrAnimated');
+        animateFlag = !animateFlag;
+        if (animateFlag) {
+            mcrPath.classList.add('refrig-animate');
+            document.getElementById('animateBtn').innerHTML = '<i class="fa-solid fa-pause"></i> MCR Loop';
+        } else {
+            mcrPath.classList.remove('refrig-animate');
+            document.getElementById('animateBtn').innerHTML = '<i class="fa-solid fa-play"></i> MCR Loop';
+        }
+    };
+
+    // load all components
+    renderPFD();
+    buildHierarchy();
+    renderInterlocks();
+    startDataSimulation();
+    showEquipmentDetails('X06-E-05.20');  // default view
+</script>
+</body>
+</html>
