@@ -11,6 +11,9 @@ export default {
       screens: { "2xl": "1400px" },
     },
     extend: {
+      animation: {
+      'flow': 'dash 1.5s linear infinite',
+      },
       fontFamily: {
         display: ["var(--font-display)"],
         mono: ["var(--font-mono)"],
