@@ -13,6 +13,7 @@ export interface DCSPanel {
     [key: string]: string | number;
   };
 }
+
 export const DCS_PANELS: DCSPanel[] = [
   // 1. PRETREATMENT / MEA CO2 REMOVAL
   {
@@ -148,5 +149,9 @@ export const DCS_SECTIONS = Array.from(
 export const getDcsPanel = (id: string) => {
   return DCS_PANELS.find(panel => panel.id === id);
 };
+
+// Image utility functions expected by DcsDetail.tsx
+export const dcsImageUrl = (url: string) => url;
+export const dcsImageViewUrl = (url: string) => url;
 
 export default DCS_PANELS;
