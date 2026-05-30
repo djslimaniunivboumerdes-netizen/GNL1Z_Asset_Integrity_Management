@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, AlertTriangle, Gauge, ThermometerSun, ArrowRightCircle } from 'lucide-react';
 import processNodes, { ProcessNode } from '../data/process_nodes';
-import { dcsPanels } from '../data/dcs_panels';
+import { DCS_PANELS } from '../data/dcs_panels';
 import gnl1zDatabase from '../data/gnl1z_database.json';
 
 const ProcessFlow = () => {
