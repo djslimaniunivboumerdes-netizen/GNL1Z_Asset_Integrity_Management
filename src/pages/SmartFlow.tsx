@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/contexts/I18nContext";
+import { getCoordinate } from "@/utils/processFlowCoordinates";
 import { getEquipmentByTag } from "@/data";
 import {
   ZoomIn, ZoomOut, RotateCcw, X,
