@@ -541,8 +541,9 @@ export default function SmartProcessFlow() {
                   }}
                   style={{
                     position: "absolute",
-                    left: `${t.x}%`,
-                    top:  `${t.y}%`,
+                    const coord = getCoordinate(t.diag);
+          left: `${coord.x}%`,
+            top: `${coord.y}%`,
                     transform: `translate(-50%,-50%) scale(${isActive ? 1.18 : isHov ? 1.08 : 1})`,
                     /* Mobile: larger hit area */
                     minWidth:  isMobile ? 44 : 0,
