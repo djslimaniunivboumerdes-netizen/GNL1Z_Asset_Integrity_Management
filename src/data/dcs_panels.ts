@@ -2,28 +2,42 @@
 
 export interface DCSPanel {
   id: string;
-  title: string;
+  title_en: string;
+  title_fr: string;
   section: string;
-  description: string;
-  imageUrl: string;           // Path to image in public/ or Supabase bucket
-  tags: string[];             // Equipment tags shown on this panel
+  unit?: string | null;
+  description_en: string;
+  description_fr: string;
+  imageUrl: string;            // kept for compatibility (unused)
+  tags: string[];
   status: 'normal' | 'alarm' | 'trip';
   lastUpdated: string;
-  kpis: {
-    [key: string]: string | number;
-  };
-  storage_path: string;       // Supabase storage path used by <DcsThumb>
+  kpis: Record<string, string | number>;
+  storage_path: string;        // Supabase path
+  related_tags?: string[];     // explicit equipment tags
 }
 
-// Full list of 23 DCS panels matching your uploaded images
+const SB = "https://gdkqetzkhgllwbpmqmux.supabase.co/storage/v1/object/public/equipment-images";
+
+// Helper to build a public Supabase URL from a storage path
+const buildSupabaseUrl = (path: string) =>
+  `${SB}/${path.split("/").map(encodeURIComponent).join("/")}`;
+
+// These functions are used by DcsDetail.tsx
+export const dcsImageUrl = (path: string) => buildSupabaseUrl(path);
+export const dcsImageViewUrl = (path: string) => buildSupabaseUrl(path);
+
 export const DCS_PANELS: DCSPanel[] = [
   // ── GENERAL / OVERVIEW ────────────────────────────
   {
     id: "general-train",
-    title: "General Train",
+    title_en: "General Train",
+    title_fr: "Train Général",
     section: "General",
-    description: "Train-wide overview – main process streams and utilities",
-    imageUrl: "/images/dcs/general train.jpg",
+    unit: null,
+    description_en: "Train-wide overview – main process streams and utilities",
+    description_fr: "Vue d'ensemble du train – flux principaux et utilités",
+    imageUrl: "",
     tags: [],
     status: "normal",
     lastUpdated: "Live",
@@ -32,10 +46,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "retour-condensat",
-    title: "Condensate Return",
+    title_en: "Condensate Return",
+    title_fr: "Retour Condensats",
     section: "General",
-    description: "Condensate recovery and return system",
-    imageUrl: "/images/dcs/Retour Condensat train.jpg",
+    unit: null,
+    description_en: "Condensate recovery and return system",
+    description_fr: "Système de récupération et retour de condensats",
+    imageUrl: "",
     tags: [],
     status: "normal",
     lastUpdated: "Live",
@@ -44,10 +61,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "fuel-gas",
-    title: "Fuel Gas System",
+    title_en: "Fuel Gas System",
+    title_fr: "Système Fuel Gas",
     section: "General",
-    description: "Fuel gas distribution and control",
-    imageUrl: "/images/dcs/fuel gas sys.jpg",
+    unit: null,
+    description_en: "Fuel gas distribution and control",
+    description_fr: "Distribution et contrôle du gaz combustible",
+    imageUrl: "",
     tags: [],
     status: "normal",
     lastUpdated: "Live",
@@ -58,10 +78,13 @@ export const DCS_PANELS: DCSPanel[] = [
   // ── FEED TREATMENT (MEA) ───────────────────────────
   {
     id: "decarbonation-01",
-    title: "Decarbonation MEA 1",
+    title_en: "Decarbonation MEA 1",
+    title_fr: "Décarbonatation MEA 1",
     section: "Treatment",
-    description: "Primary MEA CO₂ removal – absorber & flash drum",
-    imageUrl: "/images/dcs/decarbonation-01.jpg",
+    unit: "X01",
+    description_en: "Primary MEA CO₂ removal – absorber & flash drum",
+    description_fr: "Décarbonatation primaire – absorbeur et ballon flash",
+    imageUrl: "",
     tags: ["FIC101205","XV-101-223","LIC101204","TI101101","AI10138","TIC10125","LIC10121","PIC101215","TI101141","PIC10104","FI10105"],
     status: "normal",
     lastUpdated: "Just now",
@@ -70,10 +93,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "decarbonation-2",
-    title: "Decarbonation MEA 2",
+    title_en: "Decarbonation MEA 2",
+    title_fr: "Décarbonatation MEA 2",
     section: "Treatment",
-    description: "Secondary MEA CO₂ removal – regenerator & polishing",
-    imageUrl: "/images/dcs/decarbonation-2.jpg",
+    unit: "X01",
+    description_en: "Secondary MEA CO₂ removal – regenerator & polishing",
+    description_fr: "Décarbonatation secondaire – régénérateur et finition",
+    imageUrl: "",
     tags: ["TI101115","LIC101218","TI101108","LI10113","TI101106","PIC10107","FIC10078","LIC10119","XV-100-271","FIC10176"],
     status: "normal",
     lastUpdated: "1 min ago",
@@ -84,10 +110,13 @@ export const DCS_PANELS: DCSPanel[] = [
   // ── DEHYDRATION ────────────────────────────────────
   {
     id: "dehydration-1",
-    title: "Dehydration 1",
+    title_en: "Dehydration 1",
+    title_fr: "Déshydratation 1",
     section: "Dehydration",
-    description: "Molecular sieve dryers – bed switching logic",
-    imageUrl: "/images/dcs/dehydration-1.jpg",
+    unit: "X02",
+    description_en: "Molecular sieve dryers – bed switching logic",
+    description_fr: "Sécheurs à tamis moléculaires – logique de permutation",
+    imageUrl: "",
     tags: ["101-F502","LIC10201","XV-102248","HV102172","TI102215","PDI10204A","TI102122","KV-102-13","KV-102-14","TI102762"],
     status: "normal",
     lastUpdated: "2 min ago",
@@ -96,10 +125,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "dehydration-2",
-    title: "Dehydration 2",
+    title_en: "Dehydration 2",
+    title_fr: "Déshydratation 2",
     section: "Dehydration",
-    description: "Molecular sieve regeneration cycle",
-    imageUrl: "/images/dcs/dehydration-2.jpg",
+    unit: "X02",
+    description_en: "Molecular sieve regeneration cycle",
+    description_fr: "Cycle de régénération des tamis moléculaires",
+    imageUrl: "",
     tags: ["TI102215","KV-10223","TI102214","KV-10222","TIC102208","PI102217","FIC102219","LIC10239","HIC102221"],
     status: "normal",
     lastUpdated: "2 min ago",
@@ -108,10 +140,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "dehydration-3",
-    title: "Dehydration 3",
+    title_en: "Dehydration 3",
+    title_fr: "Déshydratation 3",
     section: "Dehydration",
-    description: "Mercury guard bed & final drying",
-    imageUrl: "/images/dcs/dehydration-3.jpg",
+    unit: "X02",
+    description_en: "Mercury guard bed & final drying",
+    description_fr: "Lit de démercurisation et séchage final",
+    imageUrl: "",
     tags: ["PI102149","PDI102153","PI102227","AAH102184","HIC102223","XV-102252","PDAH102229","PDALL102226"],
     status: "normal",
     lastUpdated: "2 min ago",
@@ -122,10 +157,13 @@ export const DCS_PANELS: DCSPanel[] = [
   // ── PROPANE / SCRUBBING ────────────────────────────
   {
     id: "scrubber",
-    title: "Inlet Scrubber",
+    title_en: "Inlet Scrubber",
+    title_fr: "Ballon d'entrée (Scrubber)",
     section: "Propane",
-    description: "Inlet scrub column – heavy hydrocarbon removal",
-    imageUrl: "/images/dcs/scrubber.jpg",
+    unit: "X04",
+    description_en: "Inlet scrub column – heavy hydrocarbon removal",
+    description_fr: "Colonne de lavage – élimination des hydrocarbures lourds",
+    imageUrl: "",
     tags: ["TI104102","TI104109","TIC10442","PI10412","LIC10417","FIC10409","TIC10413","LIC10421","FIC10449"],
     status: "normal",
     lastUpdated: "Just now",
@@ -134,10 +172,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "propane-1",
-    title: "Propane Loop 1",
+    title_en: "Propane Loop 1",
+    title_fr: "Boucle Propane 1",
     section: "Propane",
-    description: "High-pressure propane chilling stage",
-    imageUrl: "/images/dcs/propane-1.jpg",
+    unit: "X03",
+    description_en: "High-pressure propane chilling stage",
+    description_fr: "Étage de réfrigération propane haute pression",
+    imageUrl: "",
     tags: ["TIC10304","FIC10301","XV-103-116","PIC103114A","TIC10313","TI103103","PI10307A","FIC10314"],
     status: "normal",
     lastUpdated: "1 min ago",
@@ -146,10 +187,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "propane-2",
-    title: "Propane Loop 2",
+    title_en: "Propane Loop 2",
+    title_fr: "Boucle Propane 2",
     section: "Propane",
-    description: "Medium-pressure propane chilling",
-    imageUrl: "/images/dcs/propane-2.jpg",
+    unit: "X03",
+    description_en: "Medium-pressure propane chilling",
+    description_fr: "Réfrigération propane moyenne pression",
+    imageUrl: "",
     tags: ["PI10321A","PIC10400","TI104112","LV10424A","LIC10424","LIC10401","TI103106","FIC10428"],
     status: "normal",
     lastUpdated: "1 min ago",
@@ -158,10 +202,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "propane-3",
-    title: "Propane Loop 3",
+    title_en: "Propane Loop 3",
+    title_fr: "Boucle Propane 3",
     section: "Propane",
-    description: "Low-pressure propane chilling – deepest cooling before MCHE",
-    imageUrl: "/images/dcs/propane-3.jpg",
+    unit: "X03",
+    description_en: "Low-pressure propane chilling – deepest cooling before MCHE",
+    description_fr: "Réfrigération propane basse pression – dernier refroidissement avant MCHE",
+    imageUrl: "",
     tags: ["LV10435A","LIC10435","TI104104","TI104103","LV10440A","LIC10440","TI104113","ZI10442"],
     status: "normal",
     lastUpdated: "1 min ago",
@@ -170,10 +217,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "echangeur-recup-gpl",
-    title: "GPL Recovery Exch.",
+    title_en: "GPL Recovery Exch.",
+    title_fr: "Échangeur de récupération GPL",
     section: "Propane",
-    description: "LPG recovery heat exchanger",
-    imageUrl: "/images/dcs/echangeur de recuperation gpl.jpg",
+    unit: null,
+    description_en: "LPG recovery heat exchanger",
+    description_fr: "Échangeur de récupération de GPL",
+    imageUrl: "",
     tags: [],
     status: "normal",
     lastUpdated: "Just now",
@@ -184,10 +234,13 @@ export const DCS_PANELS: DCSPanel[] = [
   // ── LIQUEFACTION / MCR ─────────────────────────────
   {
     id: "liquefaction-1",
-    title: "Liquefaction 1",
+    title_en: "Liquefaction 1",
+    title_fr: "Liquéfaction 1",
     section: "Liquefaction",
-    description: "Main liquefaction train – first pass",
-    imageUrl: "/images/dcs/liquefaction-1.jpg",
+    unit: "X06",
+    description_en: "Main liquefaction train – first pass",
+    description_fr: "Train principal de liquéfaction – première passe",
+    imageUrl: "",
     tags: [],
     status: "normal",
     lastUpdated: "Just now",
@@ -196,10 +249,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "liquefaction-2",
-    title: "Liquefaction 2",
+    title_en: "Liquefaction 2",
+    title_fr: "Liquéfaction 2",
     section: "Liquefaction",
-    description: "Liquefaction trim cooling & subcooling",
-    imageUrl: "/images/dcs/liquefaction-2.jpg",
+    unit: "X06",
+    description_en: "Liquefaction trim cooling & subcooling",
+    description_fr: "Refroidissement final et sous-refroidissement",
+    imageUrl: "",
     tags: ["TIC10612","TI106123","TIC10611","ZI10610","PIC10610","FI10616A","AI106164","LIC10605"],
     status: "normal",
     lastUpdated: "Just now",
@@ -208,10 +264,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "mcr-1",
-    title: "MCR Refrigeration 1",
+    title_en: "MCR Refrigeration 1",
+    title_fr: "Réfrigération MCR 1",
     section: "Compression",
-    description: "Mixed refrigerant compressor – stage 1 (LP/MP)",
-    imageUrl: "/images/dcs/MCR-1.jpg",
+    unit: "X05",
+    description_en: "Mixed refrigerant compressor – stage 1 (LP/MP)",
+    description_fr: "Compresseur de réfrigérant mixte – étage 1 (BP/MP)",
+    imageUrl: "",
     tags: ["FIC10505","FIC10503","FIC10504","SIC105231","PI105212","TI105101","TI105102","FIC10519","AI106164"],
     status: "normal",
     lastUpdated: "1 min ago",
@@ -220,10 +279,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "mcr-2",
-    title: "MCR Refrigeration 2",
+    title_en: "MCR Refrigeration 2",
+    title_fr: "Réfrigération MCR 2",
     section: "Compression",
-    description: "Mixed refrigerant compressor – stage 2 (HP)",
-    imageUrl: "/images/dcs/MCR-2.jpg",
+    unit: "X05",
+    description_en: "Mixed refrigerant compressor – stage 2 (HP)",
+    description_fr: "Compresseur de réfrigérant mixte – étage 2 (HP)",
+    imageUrl: "",
     tags: ["PI105312","SIC105331","TI105103","FIC10529","TI105104","XV-105-127","TI104113"],
     status: "normal",
     lastUpdated: "1 min ago",
@@ -232,10 +294,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "mcr-3",
-    title: "MCR Refrigeration 3",
+    title_en: "MCR Refrigeration 3",
+    title_fr: "Réfrigération MCR 3",
     section: "Compression",
-    description: "MCR final stage & HP separator",
-    imageUrl: "/images/dcs/MCR-3.jpg",
+    unit: "X05",
+    description_en: "MCR final stage & HP separator",
+    description_fr: "Étage final MCR et séparateur HP",
+    imageUrl: "",
     tags: ["TI105102","PI105212","PI10515A","FIC10519","TI105101","HIC10519","FV-105-19"],
     status: "normal",
     lastUpdated: "1 min ago",
@@ -246,10 +311,13 @@ export const DCS_PANELS: DCSPanel[] = [
   // ── FRACTIONATION ──────────────────────────────────
   {
     id: "demethanisation",
-    title: "Demethaniser",
+    title_en: "Demethaniser",
+    title_fr: "Déméthaniseur",
     section: "Fractionation",
-    description: "Methane (LNG) / C₂+ separation column",
-    imageUrl: "/images/dcs/demethanisation.jpg",
+    unit: "X07",
+    description_en: "Methane (LNG) / C₂+ separation column",
+    description_fr: "Colonne de séparation méthane (GNL) / C₂+",
+    imageUrl: "",
     tags: ["XV-107-113","TI107101","TI107102","TIC10705","TI107106","LIC10709","FIC10713","FIC10715"],
     status: "normal",
     lastUpdated: "Just now",
@@ -258,10 +326,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "demethanisation-2",
-    title: "Demethaniser 2",
+    title_en: "Demethaniser 2",
+    title_fr: "Déméthaniseur 2",
     section: "Fractionation",
-    description: "Demethaniser secondary view – reboiler & condenser",
-    imageUrl: "/images/dcs/demethanisation-2.jpg",
+    unit: "X07",
+    description_en: "Demethaniser secondary view – reboiler & condenser",
+    description_fr: "Vue secondaire – rebouilleur et condenseur",
+    imageUrl: "",
     tags: [],
     status: "normal",
     lastUpdated: "Just now",
@@ -270,10 +341,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "deethanisation",
-    title: "Deethaniser",
+    title_en: "Deethaniser",
+    title_fr: "Dééthaniseur",
     section: "Fractionation",
-    description: "Ethane / propane splitter column",
-    imageUrl: "/images/dcs/deethanisation.jpg",
+    unit: "X08",
+    description_en: "Ethane / propane splitter column",
+    description_fr: "Colonne de séparation éthane / propane",
+    imageUrl: "",
     tags: ["TI108106","PIC10802","TI108101","FIC10826","LIC10831","FIC10814","LIC10819","TIC10803"],
     status: "normal",
     lastUpdated: "Just now",
@@ -282,10 +356,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "depropanisation",
-    title: "Depropaniser",
+    title_en: "Depropaniser",
+    title_fr: "Dépropaniseur",
     section: "Fractionation",
-    description: "Propane (LPG) / butane separation",
-    imageUrl: "/images/dcs/depropanisation.jpg",
+    unit: "X09",
+    description_en: "Propane (LPG) / butane separation",
+    description_fr: "Séparation propane (GPL) / butane",
+    imageUrl: "",
     tags: ["PIC10901","PIC10912","TI109106","LIC10914","FIC10910","TI109101","TIC10902","LIC10916"],
     status: "normal",
     lastUpdated: "Just now",
@@ -294,10 +371,13 @@ export const DCS_PANELS: DCSPanel[] = [
   },
   {
     id: "debutanisation",
-    title: "Debutaniser",
+    title_en: "Debutaniser",
+    title_fr: "Débutaniseur",
     section: "Fractionation",
-    description: "Butane / naphtha separation",
-    imageUrl: "/images/dcs/debutanisation.jpg",
+    unit: "X10",
+    description_en: "Butane / naphtha separation",
+    description_fr: "Séparation butane / naphta",
+    imageUrl: "",
     tags: ["TI110106","PIC11009","FIC11000","TI110101","TIC11001","LIC11025","FIC11010","LIC11037"],
     status: "normal",
     lastUpdated: "Just now",
@@ -313,9 +393,5 @@ export const DCS_SECTIONS = Array.from(
 export const getDcsPanel = (id: string) => {
   return DCS_PANELS.find(panel => panel.id === id);
 };
-
-// Image utility functions expected by DcsDetail.tsx
-export const dcsImageUrl = (url: string) => url;
-export const dcsImageViewUrl = (url: string) => url;
 
 export default DCS_PANELS;
