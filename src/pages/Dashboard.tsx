@@ -189,4 +189,4 @@ function Stat({ icon: Icon, label, value, mono }: { icon: LucideIcon; label: str
       <div className={`text-xl md:text-2xl font-bold text-white ${mono ? "font-mono" : "font-display"}`}>{value}</div>
     </div>
   );
-      }
+}
