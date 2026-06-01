@@ -5,6 +5,7 @@ import { ArrowRight, Database, Cpu, BookOpen, User, Info, Factory, Activity, Pac
 import type { LucideIcon } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { META, EQUIPMENT } from "@/data";
+import { GNL1Z_ASSETS } from "@/utils/assets";
 import { TestScheduleWidget } from "@/components/TestScheduleWidget";
 
 const moduleCards = [
@@ -17,37 +18,37 @@ const moduleCards = [
   { key: "author",    to: "/author",     icon: User,      accent: false, descEn: "Project author, credentials, ORCID, contact channels and mobile app downloads.",                 descFr: "Auteur du projet, références, ORCID, canaux de contact et téléchargements de l'application."  },
 ] as const;
 
-/* ─── AUTOMATIC BACKGROUND SLIDES ─── */
+/* ─── LOCALIZED INDUSTRIAL BACKGROUND SLIDES ─── */
 const heroSlides = [
   {
     tag: "Unit 40",
     nameEn: "Main Cryogenic Heat Exchanger (MCHE)",
     nameFr: "Échangeur Cryogénique Principal",
-    image: "https://images.unsplash.com/photo-1581094120546-4971c461356e?auto=format&fit=crop&q=80&w=1600"
+    image: GNL1Z_ASSETS.units.unit40
   },
   {
     tag: "Unit 30",
     nameEn: "MCR Centrifugal Compressors",
     nameFr: "Compresseurs Centrifuges MCR",
-    image: "https://images.unsplash.com/photo-1537462715879-360eeb61a0bc?auto=format&fit=crop&q=80&w=1600"
+    image: GNL1Z_ASSETS.units.unit30
   },
   {
     tag: "Unit 50",
     nameEn: "Cryogenic LNG Storage Tanks",
     nameFr: "Bacs de Stockage Cryogénique GNL",
-    image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=1600"
+    image: GNL1Z_ASSETS.units.unit50
   },
   {
     tag: "Unit 60",
     nameEn: "Marine Loading Berth Infrastructure",
     nameFr: "Infrastructures d'Appontement Maritime",
-    image: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&q=80&w=1600"
+    image: GNL1Z_ASSETS.units.unit60
   },
   {
     tag: "Unit 70",
     nameEn: "Steam Generation & Boiler Systems",
     nameFr: "Génération de Vapeur & Chaudières",
-    image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=1600"
+    image: GNL1Z_ASSETS.units.unit70
   }
 ] as const;
 
@@ -67,7 +68,7 @@ export default function Dashboard() {
       {/* Hero Container */}
       <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center bg-zinc-950 isolation-isolate">
         
-        {/* Layer 1: Native Image Element Carousels (Fixes CSS compiler/grid injection issues) */}
+        {/* Layer 1: Native Image Element Carousels (Uses local assets flawlessly offline) */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {heroSlides.map((slide, idx) => (
             <img
@@ -183,4 +184,4 @@ function Stat({ icon: Icon, label, value, mono }: { icon: LucideIcon; label: str
       <div className={`text-xl md:text-2xl font-bold text-white ${mono ? "font-mono" : "font-display"}`}>{value}</div>
     </div>
   );
-              }
+          }
