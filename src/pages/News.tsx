@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Newspaper, TrendingUp, BarChart3, RefreshCw, Globe,
   AlertTriangle, Clock, Wifi, WifiOff, CheckCircle2,
+  Flame, Ship, Factory, DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/contexts/I18nContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import newsHero from "@/assets/news-hero.jpg";
+import sonatrachLogo from "@/assets/sonatrach-logo.png";
+
 
 /* ─── Types ─── */
 interface PriceItem {
@@ -199,38 +203,63 @@ function PriceGrid({ items }: { items: PriceItem[] }) {
   );
 }
 
+function categoryVisual(cat: string, source: string) {
+  const c = (cat || "").toLowerCase();
+  const s = (source || "").toLowerCase();
+  if (s.includes("sonatrach")) return { icon: Factory, gradient: "from-amber-600 via-orange-600 to-rose-700" };
+  if (c.includes("price") || c.includes("market")) return { icon: DollarSign, gradient: "from-emerald-600 via-teal-600 to-cyan-700" };
+  if (c.includes("ship") || c.includes("cargo") || c.includes("export")) return { icon: Ship, gradient: "from-sky-600 via-blue-700 to-indigo-800" };
+  if (c.includes("flare") || c.includes("emiss") || c.includes("env")) return { icon: Flame, gradient: "from-rose-600 via-red-700 to-amber-700" };
+  return { icon: Newspaper, gradient: "from-slate-700 via-slate-800 to-zinc-900" };
+}
+
 function NewsList({ items, lang, limit }: { items: NewsItem[]; lang: string; limit?: number }) {
   const shown = limit ? items.slice(0, limit) : items;
   if (shown.length === 0) return (
     <p className="text-sm text-muted-foreground py-4">{lang === "en" ? "No news found." : "Aucune actualité trouvée."}</p>
   );
   return (
-    <div className="divide-y divide-border">
-      {shown.map((n) => (
-        <a
-          key={n.url + n.title}
-          href={n.url || "#"}
-          target="_blank" rel="noopener noreferrer"
-          className="block py-3.5 hover:bg-accent/5 transition-colors px-1 rounded"
-        >
-          <div className="font-medium text-sm leading-snug line-clamp-2">
-            {lang === "en" ? n.title : (n.title_fr || n.title)}
-          </div>
-          {(n.summary || n.summary_fr) && (
-            <div className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-              {lang === "en" ? n.summary : (n.summary_fr || n.summary)}
+    <div className="space-y-3">
+      {shown.map((n) => {
+        const { icon: Icon, gradient } = categoryVisual(n.category, n.source);
+        const isSonatrach = (n.source || "").toLowerCase().includes("sonatrach");
+        return (
+          <a
+            key={n.url + n.title}
+            href={n.url || "#"}
+            target="_blank" rel="noopener noreferrer"
+            className="group flex gap-3 p-2.5 rounded-lg border border-border hover:border-accent/50 hover:bg-accent/5 transition-all"
+          >
+            <div className={`relative shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-md overflow-hidden bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+              {isSonatrach ? (
+                <img src={sonatrachLogo} alt="" className="w-12 h-12 object-contain opacity-95" loading="lazy" />
+              ) : (
+                <Icon className="h-8 w-8 text-white/90" />
+              )}
+              <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
             </div>
-          )}
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            <Badge variant="outline" className="text-[10px] font-mono">{n.source}</Badge>
-            <span className="text-[10px] text-muted-foreground font-mono">{n.date}</span>
-            {n.category && <Badge variant="secondary" className="text-[10px]">{n.category}</Badge>}
-          </div>
-        </a>
-      ))}
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-sm leading-snug line-clamp-2">
+                {lang === "en" ? n.title : (n.title_fr || n.title)}
+              </div>
+              {(n.summary || n.summary_fr) && (
+                <div className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                  {lang === "en" ? n.summary : (n.summary_fr || n.summary)}
+                </div>
+              )}
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <Badge variant="outline" className="text-[10px] font-mono">{n.source}</Badge>
+                <span className="text-[10px] text-muted-foreground font-mono">{n.date}</span>
+                {n.category && <Badge variant="secondary" className="text-[10px]">{n.category}</Badge>}
+              </div>
+            </div>
+          </a>
+        );
+      })}
     </div>
   );
 }
+
 
 /* ─── Page ─── */
 export default function News() {
@@ -299,17 +328,24 @@ export default function News() {
 
   return (
     <div className="px-4 md:px-8 py-6 md:py-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="text-[10px] uppercase tracking-widest text-accent font-mono mb-1">/ {t("news")}</div>
-      <div className="flex items-center gap-3 mb-2">
-        <Newspaper className="h-7 w-7 text-accent" />
-        <h1 className="text-3xl md:text-4xl font-display font-bold">{t("news")}</h1>
+      {/* Hero banner */}
+      <div className="relative h-40 md:h-56 rounded-xl overflow-hidden mb-6 border border-border shadow-industrial">
+        <img src={newsHero} alt="LNG plant at dusk" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/20" />
+        <div className="relative h-full flex flex-col justify-end p-5 md:p-7">
+          <div className="text-[10px] uppercase tracking-widest text-accent font-mono mb-1">/ {t("news")}</div>
+          <div className="flex items-center gap-3">
+            <Newspaper className="h-7 w-7 text-accent" />
+            <h1 className="text-3xl md:text-4xl font-display font-bold drop-shadow-lg">{t("news")}</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
+            {lang === "en"
+              ? "LNG market intelligence, Sonatrach updates, and price trends. Shared cache refreshes every 5 days."
+              : "Intelligence marché GNL, actualités Sonatrach et tendances de prix. Cache partagé rafraîchi tous les 5 jours."}
+          </p>
+        </div>
       </div>
-      <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
-        {lang === "en"
-          ? "LNG market intelligence, Sonatrach updates, and price trends. Shared cache refreshes every 5 days."
-          : "Intelligence marché GNL, actualités Sonatrach et tendances de prix. Cache partagé rafraîchi tous les 5 jours."}
-      </p>
+
 
       {/* Search + controls */}
       <div className="flex flex-col md:flex-row gap-3 mb-5 items-start">
@@ -544,3 +580,4 @@ export default function News() {
     </div>
   );
                   }
+
