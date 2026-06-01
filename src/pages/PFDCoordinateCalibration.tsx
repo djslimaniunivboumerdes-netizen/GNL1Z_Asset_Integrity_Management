@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { extractTagCoordinates } from "@/utils/extractTagCoordinates";
+import { useState, useRef } from "react";
 
 export default function PFDCoordinateCalibration() {
   const [tags, setTags] = useState<any[]>([]);
