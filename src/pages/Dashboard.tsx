@@ -85,64 +85,66 @@ export default function Dashboard() {
   useEffect(() => {
     const sequence = setInterval(() => {
       setSlideIndex((prev) => (prev + 1) % heroSlides.length);
-    }, 5000);
+    }, 5500);
     return () => clearInterval(sequence);
   }, []);
 
   return (
-    <div className="industrial-grid space-y-6">
-      {/* Hero Container */}
-      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center bg-zinc-950 isolation-isolate rounded-2xl mx-4 md:mx-10 mt-4">
+    <div className="industrial-grid min-h-screen bg-background pb-12">
+      {/* Expanded Edge-to-Edge Widescreen Hero Banner */}
+      <section className="relative overflow-hidden border-b border-border min-h-[440px] flex items-center bg-zinc-950 isolation-isolate w-full">
         
-        {/* Layer 1: Native Image Element Carousels */}
+        {/* Layer 1: High-Definition Crisp Carousel Images */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {heroSlides.map((slide, idx) => (
             <img
               key={idx}
               src={slide.image}
               alt={slide.tag}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out mix-blend-luminosity
-                ${idx === slideIndex ? "opacity-30 animate-fade-in" : "opacity-0"}`}
+              className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-1000 ease-in-out
+                ${idx === slideIndex ? "opacity-85 scale-100" : "opacity-0 scale-105"}`}
             />
           ))}
         </div>
 
-        {/* Layer 2: Calibrated Dark Industrial Overlay for High-Contrast Text Legibility */}
-        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent z-10 pointer-events-none" />
+        {/* Layer 2: Left-To-Right Precision Masking Gradient (Keeps right side completely crisp) */}
+        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/75 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-50 z-10 pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
 
-        {/* Layer 3: Clean Content Text Details */}
-        <div className="relative px-6 md:px-12 py-12 md:py-16 max-w-7xl mx-auto z-20 w-full">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        {/* Layer 3: Interactive Typography Content */}
+        <div className="relative px-4 md:px-10 py-14 max-w-7xl mx-auto z-20 w-full">
+          <div className="flex flex-col gap-8">
             <div>
-              <h1 className="text-5xl md:text-6xl font-display font-extrabold text-white leading-[0.95] tracking-tight drop-shadow-md flex items-baseline gap-1">
-                GNL1Z<span className="h-3 w-3 rounded-full bg-orange-500 inline-block translate-y-[-4px]" />
+              <h1 className="text-5xl md:text-7xl font-display font-extrabold text-white leading-[0.95] tracking-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] flex items-baseline gap-1">
+                GNL1Z<span className="h-4 w-4 rounded-full bg-orange-500 inline-block translate-y-[-4px]" />
               </h1>
-              <p className="mt-4 text-base md:text-xl text-zinc-300 max-w-2xl font-light drop-shadow">
+              <p className="mt-5 text-base md:text-xl text-zinc-100 max-w-2xl font-normal drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] leading-relaxed">
                 {lang === "en"
                   ? "Industrial Asset Management for the Sonatrach Arzew/Bethioua liquefaction complex."
                   : "Gestion d'actifs industriels pour le complexe de liquéfaction Sonatrach Arzew/Bethioua."}
               </p>
             </div>
-          </div>
 
-          <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-            <Stat icon={Factory} label={t("trains")} value={META.trains} />
-            <Stat icon={Database} label={t("equipCount")} value={EQUIPMENT.length} />
-            <Stat icon={Package} label={t("spareParts")} value={META.spare_parts_count} />
-            <Stat icon={Activity} label={t("lastUpdate")} value={META.last_updated} mono />
+            {/* Industrial Stats Metrics Grid Component */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mt-4">
+              <Stat icon={Factory} label={t("trains")} value={META.trains} />
+              <Stat icon={Database} label={t("equipCount")} value={EQUIPMENT.length} />
+              <Stat icon={Package} label={t("spareParts")} value={META.spare_parts_count} />
+              <Stat icon={Activity} label={t("lastUpdate")} value={META.last_updated} mono />
+            </div>
           </div>
         </div>
       </section>
 
       {/* Scheduler Module Widget */}
-      <div className="px-4 md:px-10 pt-4">
+      <div className="px-4 md:px-10 pt-8">
         <TestScheduleWidget />
       </div>
 
       {/* High-Visibility Industrial Grid Navigation Modules */}
-      <section className="px-4 md:px-10 py-6 max-w-7xl mx-auto">
-        <div className="flex items-end justify-between mb-6">
+      <section className="px-4 md:px-10 py-8 max-w-7xl mx-auto">
+        <div className="flex items-end justify-between mb-8">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-orange-500 font-mono mb-1">/ {t("modules")}</div>
             <h2 className="text-2xl md:text-3xl font-display font-bold">{t("modules")}</h2>
@@ -177,7 +179,7 @@ export default function Dashboard() {
                 {/* Conditional Equipment Counter Badge Metrics */}
                 {m.key === "equipment" ? (
                   <div className="mt-4 pt-3 border-t border-border/10 flex gap-4 text-[10px] font-mono tracking-wider uppercase text-muted-foreground">
-                    <span><b className="text-amber-500 font-semibold">{EQUIPMENT.length}</b> {t("trains") ? "Units" : "Units"}</span>
+                    <span><b className="text-amber-500 font-semibold">{EQUIPMENT.length}</b> Units</span>
                     <span><b className="text-amber-500 font-semibold">{META.spare_parts_count}</b> Parts</span>
                   </div>
                 ) : (
@@ -197,12 +199,12 @@ export default function Dashboard() {
 
 function Stat({ icon: Icon, label, value, mono }: { icon: LucideIcon; label: string; value: string | number; mono?: boolean }) {
   return (
-    <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-3 md:p-4 shadow-inner hover:border-orange-500/20 transition-colors">
-      <div className="flex items-center gap-2 text-white/70 text-[10px] uppercase tracking-widest mb-2">
+    <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-xl hover:border-orange-500/30 transition-all duration-200">
+      <div className="flex items-center gap-2 text-zinc-400 text-[10px] uppercase tracking-widest mb-2">
         <Icon className="h-3 w-3 text-orange-500" />
         {label}
       </div>
       <div className={`text-xl md:text-2xl font-bold text-white ${mono ? "font-mono text-base" : "font-display"}`}>{value}</div>
     </div>
   );
-}
+                }
