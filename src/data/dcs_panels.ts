@@ -12,11 +12,10 @@ export interface DCSPanel {
   kpis: {
     [key: string]: string | number;
   };
-  // Extra field used by DCS Directory thumbnails (Supabase storage path)
-  storage_path: string;
+  storage_path: string;       // Supabase storage path used by <DcsThumb>
 }
 
-// Helper: all the panels from the Smart‑Flow process, enriched with full metadata
+// Full list of 23 DCS panels matching your uploaded images
 export const DCS_PANELS: DCSPanel[] = [
   // ── GENERAL / OVERVIEW ────────────────────────────
   {
@@ -307,12 +306,10 @@ export const DCS_PANELS: DCSPanel[] = [
   },
 ];
 
-// Extract unique section names for the filter UI
 export const DCS_SECTIONS = Array.from(
   new Set(DCS_PANELS.map(panel => panel.section))
 );
 
-// Helper function to find a single panel by its unique ID
 export const getDcsPanel = (id: string) => {
   return DCS_PANELS.find(panel => panel.id === id);
 };
