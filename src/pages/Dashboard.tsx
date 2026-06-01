@@ -65,9 +65,9 @@ export default function Dashboard() {
   return (
     <div className="industrial-grid">
       {/* Hero Container with Sliding Backdrops */}
-      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center bg-background">
+      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center bg-zinc-950">
         
-        {/* Layer 1: Sliding Backdrops (Boosted visibility to 45%) */}
+        {/* Layer 1: Sliding Backdrops */}
         <div className="absolute inset-0 z-0">
           {heroSlides.map((slide, idx) => (
             <div
@@ -75,14 +75,14 @@ export default function Dashboard() {
               className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
               style={{ 
                 backgroundImage: `url(${slide.image})`,
-                opacity: idx === slideIndex ? 0.45 : 0 
+                opacity: idx === slideIndex ? 0.38 : 0 
               }}
             />
           ))}
         </div>
 
-        {/* Layer 2: Fixed Text Scrim (Gradually fades out to let the image shine on the right side) */}
-        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40安全 z-10" />
+        {/* Layer 2: Fixed Dark Tint Overlay (Optimized for Mobile & Text Readability) */}
+        <div className="absolute inset-0 bg-black/65 z-10" />
         <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
 
         {/* Layer 3: Interactive Text Details */}
@@ -95,7 +95,7 @@ export default function Dashboard() {
                   {META.process} · {META.trains} {t("trains")}
                 </span>
               </div>
-              <h1 className="text-4xl md:text-6xl font-display font-bold text-white leading-[0.95] tracking-tight drop-shadow-sm">
+              <h1 className="text-4xl md:text-6xl font-display font-bold text-white leading-[0.95] tracking-tight drop-shadow-md">
                 GNL1Z<span className="text-accent">.</span>
               </h1>
               <p className="mt-3 text-base md:text-xl text-white/90 max-w-2xl font-light drop-shadow">
@@ -106,7 +106,7 @@ export default function Dashboard() {
             </div>
 
             {/* Backdrop location ticker */}
-            <div className="border border-white/10 bg-black/50 backdrop-blur-md rounded px-3 py-2 text-left md:text-right max-w-xs self-start md:self-end shadow-xl">
+            <div className="border border-white/10 bg-black/60 backdrop-blur-md rounded px-3 py-2 text-left md:text-right max-w-xs self-start md:self-end shadow-xl">
               <span className="text-[9px] font-mono text-accent uppercase tracking-widest block mb-0.5">
                 ✦ Active Sector View
               </span>
