@@ -1,12 +1,27 @@
 import { useState, useEffect, type ImgHTMLAttributes } from "react";
 import { Cpu } from "lucide-react";
 
-interface StorageImgProps
-  extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "onError"> {
+interface StorageImgProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "onError"> {
   storagePath: string;
   alt: string;
   fallbackClassName?: string;
 }
+
+/**
+ * Resilient image loader.
+ * 1. Try Supabase Storage public URL (bucket: equipment-images)
+ * 2. Fall back to /images/<basename> in the public folder
+ * 3. Show a Cpu icon if both fail
+ *
+ * NOTE: The equipment-images bucket lives on a different Supabase project
+ * (gdkqetzkhgllwbpmqmux) than the app's auth/db project — that's intentional
+ * and matches where the user uploaded the screenshots.
+ */
+const STORAGE_PROJECT = "https://gdkqetzkhgllwbpmqmux.supabase.co";
+const BUCKET = "equipment-images";
+
+const encodePath = (p: string) =>
+  p.split("/").map(encodeURIComponent).join("/");
 
 export function StorageImg({
   storagePath,
@@ -15,38 +30,62 @@ export function StorageImg({
   className,
   ...rest
 }: StorageImgProps) {
-  // 1. Get the Supabase URL from Vite environment variables
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-  
-  // 2. State to handle image loading errors
-  const [error, setError] = useState(false);
+  const primary = `${STORAGE_PROJECT}/storage/v1/object/public/${BUCKET}/${encodePath(storagePath)}`;
+  const basename = storagePath.split("/").pop() ?? storagePath;
+  const fallback = `/images/${encodeURIComponent(basename)}`;
 
-  // 3. Construct the public URL for the asset
-  // Assumes your bucket name is 'images' (change if necessary)
-  const imageUrl = `${SUPABASE_URL}/storage/v1/object/public/images/${storagePath}`;
+  const [src, setSrc] = useState(primary);
+  const [stage, setStage] = useState<"primary" | "fallback" | "failed">("primary");
+  const [loaded, setLoaded] = useState(false);
 
-  // Reset error state if the path changes
   useEffect(() => {
-    setError(false);
-  }, [storagePath]);
+    setSrc(primary);
+    setStage("primary");
+    setLoaded(false);
+  }, [primary]);
 
-  // 4. Render fallback icon if the URL is missing or image fails to load
-  if (!SUPABASE_URL || error) {
+  const handleError = () => {
+    if (stage === "primary") {
+      setSrc(fallback);
+      setStage("fallback");
+    } else {
+      setStage("failed");
+    }
+  };
+
+  if (stage === "failed") {
     return (
-      <div className={`flex items-center justify-center bg-muted text-muted-foreground ${className} ${fallbackClassName}`}>
-        <Cpu className="h-1/2 w-1/2 max-h-8 max-w-8 animate-pulse" />
+      <div
+        className={
+          fallbackClassName ??
+          `flex flex-col items-center justify-center gap-2 text-white/30 bg-muted ${className ?? ""}`
+        }
+      >
+        <Cpu className="h-8 w-8" />
+        <span className="text-[10px] font-mono uppercase tracking-widest">DCS Screen</span>
+        <span className="text-[10px] text-white/20">Image unavailable</span>
       </div>
     );
   }
 
-  // 5. Render the actual image
   return (
-    <img
-      src={imageUrl}
-      alt={alt}
-      className={className}
-      onError={() => setError(true)}
-      {...rest}
-    />
+    <>
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <Cpu className="h-6 w-6 text-white/20 animate-pulse" />
+        </div>
+      )}
+      <img
+        key={src}
+        src={src}
+        alt={alt}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className={className}
+        onLoad={() => setLoaded(true)}
+        onError={handleError}
+        {...rest}
+      />
+    </>
   );
 }
