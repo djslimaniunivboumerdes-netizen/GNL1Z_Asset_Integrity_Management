@@ -1,12 +1,15 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/contexts/I18nContext";
 import { getCoordinate } from "@/utils/processFlowCoordinates";
 import { getEquipmentByTag } from "@/data";
 import {
-  ZoomIn, ZoomOut, RotateCcw, X,
+  ZoomIn, ZoomOut, RotateCcw, X, Search,
   Layers, ExternalLink, BookOpen, Cpu, ChevronDown,
 } from "lucide-react";
+
+/* ─── DEBUG MODE TOGGLE ─────────────────────────────────────────────────── */
+const DEBUG_COORDINATES = false; // Set to true to render red targeting anchors over coordinates
 
 /* ─── Supabase storage ───────────────────────────────────────────────────── */
 const SB  = "https://gdkqetzkhgllwbpmqmux.supabase.co/storage/v1/object/public/equipment-images";
@@ -89,10 +92,8 @@ const INSTR: Record<string, string[]> = {
   "debutanisation":   ["TI110106","PIC11009","FIC11000","TI110101","TIC11001","LIC11025","FIC11010","LIC11037"],
 };
 
-/* ─── Tag definitions ── positions measured pixel-precisely from Image 2 ── */
-/*  Image 2 is 1218 × 934 px.
-    x = label-center-x / 1218 * 100
-    y = label-center-y / 934  * 100                                          */
+/* Keep initial x/y inside type interface and arrays to act as manual fallback anchors 
+   if the downstream OCR parser fails to read an individual document tag boundary */
 interface TagDef {
   id: string; diag: string; x: number; y: number;
   nameEn: string; nameFr: string;
@@ -130,7 +131,6 @@ const TAGS: TagDef[] = [
     descEn:"Horizontal flash drum — rich amine pressure let-down before regenerator. Recovers dissolved hydrocarbons from rich MEA.",
     specs:{ Pressure:"7.8 bar", Mass:"300 kg", Serial:"V-2089-F", Status:"PREVENTIVE" },
   },
-
   /* ── DEHYDRATION ─────────────────────────────────── */
   {
     id:"R0311", diag:"102-R03.11", x:16.8, y:15.3,
@@ -159,7 +159,6 @@ const TAGS: TagDef[] = [
     descEn:"Sulphur-impregnated activated-carbon guard bed. Reduces mercury to <0.01 µg/Nm³ before cryogenic processing — protects aluminium MCHE.",
     specs:{ Status:"PREVENTIVE" },
   },
-
   /* ── PROPANE / SCRUBBING ─────────────────────────── */
   {
     id:"E0540", diag:"104-E05.40", x:41.1, y:22.2,
@@ -206,7 +205,6 @@ const TAGS: TagDef[] = [
     descEn:"LP propane suction drum — protects LP compressor stage from liquid carry-over at the coldest propane level (~−35 °C).",
     specs:{ Mass:"400 kg", Status:"DEROGATION" },
   },
-
   /* ── LIQUEFACTION / MCR ──────────────────────────── */
   {
     id:"E0520", diag:"106-E05.20", x:50.6, y:17.3,
@@ -244,7 +242,6 @@ const TAGS: TagDef[] = [
     descEn:"MCR HP suction drum — final liquid/vapour separation before HP compressor stage. Ensures dry gas enters HP impellers.",
     specs:{ Mass:"400 kg", Status:"DEROGATION" },
   },
-
   /* ── COMPRESSORS ─────────────────────────────────── */
   {
     id:"K110", diag:"103-K01.10", x:59.5, y:46.7,
@@ -282,7 +279,6 @@ const TAGS: TagDef[] = [
     descEn:"MCR HP compressor body — final stage, discharges at ~44 bar. HP MCR passes through propane aftercooler before HP separator.",
     specs:{},
   },
-
   /* ── FRACTIONATION ───────────────────────────────── */
   {
     id:"F0721", diag:"107-F07.21", x:10.2, y:69.4,
@@ -322,15 +318,13 @@ const TAGS: TagDef[] = [
   },
 ];
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENT
-═══════════════════════════════════════════════════════════════════════════ */
 export default function SmartProcessFlow() {
   const { lang } = useI18n();
   const L = (en: string, fr: string) => lang === "fr" ? fr : en;
 
   const [selected,  setSelected]  = useState<TagDef | null>(null);
   const [filter,    setFilter]    = useState<Section | "all">("all");
+  const [search,    setSearch]    = useState("");
   const [hovered,   setHovered]   = useState<string | null>(null);
   const [lightbox,  setLightbox]  = useState<{ url: string; title: string } | null>(null);
   const [scale,     setScale]     = useState(1);
@@ -341,7 +335,7 @@ export default function SmartProcessFlow() {
   const dragStart  = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const wrapRef    = useRef<HTMLDivElement>(null);
 
-  /* detect mobile */
+  /* Detect Mobile Viewport Breakpoints */
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -349,17 +343,18 @@ export default function SmartProcessFlow() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  /* zoom */
+  /* Smooth Zoom Operations */
   const applyZoom = useCallback((delta: number) => {
     setScale(s => Math.min(6, Math.max(0.3, s + delta)));
   }, []);
   const resetView = () => { setScale(1); setOffset({ x: 0, y: 0 }); };
 
-  /* wheel zoom */
+  /* Canvas Intrinsic Wheel Listening Events */
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     setScale(s => Math.min(6, Math.max(0.3, s - e.deltaY * 0.001)));
   }, []);
+  
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -367,13 +362,14 @@ export default function SmartProcessFlow() {
     return () => el.removeEventListener("wheel", handleWheel);
   }, [handleWheel]);
 
-  /* pan */
+  /* Pointer Coordinate Mapping Engine for Vector Tracking */
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0) return; // Permit left-clicks only
     isDragging.current = false;
     dragStart.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
     (e.target as Element).setPointerCapture(e.pointerId);
   };
+  
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragStart.current) return;
     const dx = e.clientX - dragStart.current.x;
@@ -381,9 +377,10 @@ export default function SmartProcessFlow() {
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isDragging.current = true;
     setOffset({ x: dragStart.current.ox + dx, y: dragStart.current.oy + dy });
   };
+  
   const onPointerUp = () => { dragStart.current = null; };
 
-  /* keyboard shortcuts */
+  /* Native Hardware Key Listeners */
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       if (e.key === "Escape") { setSelected(null); setLightbox(null); }
@@ -395,16 +392,22 @@ export default function SmartProcessFlow() {
     return () => window.removeEventListener("keydown", fn);
   }, [applyZoom]);
 
-  const eq = selected?.dbTag ? getEquipmentByTag(selected.dbTag) : null;
   const sc = selected ? SECT[selected.section] : null;
-  const visibleTags = filter === "all" ? TAGS : TAGS.filter(t => t.section === filter);
 
-  /* aggregated instruments for selected tag */
-  const instruments = selected
-    ? [...new Set(selected.dcsPanels.flatMap(pid => INSTR[pid] ?? []))].slice(0, 28)
-    : [];
+  /* Filter & Text Search Execution Pipelines */
+  const visibleTags = useMemo(() => {
+    return TAGS.filter(t => {
+      const matchSection = filter === "all" || t.section === filter;
+      const query = search.toLowerCase().trim();
+      const matchSearch = !query || 
+        t.diag.toLowerCase().includes(query) || 
+        t.id.toLowerCase().includes(query) ||
+        t.nameEn.toLowerCase().includes(query) ||
+        t.nameFr.toLowerCase().includes(query);
+      return matchSection && matchSearch;
+    });
+  }, [filter, search]);
 
-  /* ── RENDER ── */
   return (
     <div
       style={{
@@ -414,44 +417,65 @@ export default function SmartProcessFlow() {
         fontFamily: "system-ui, sans-serif",
       }}
     >
-
-      {/* ═══ TOP BAR ═══ */}
+      {/* ═══ TOP CONTROL SYSTEMS BAR ═══ */}
       <div style={{
-        height: isMobile ? 44 : 48, flexShrink: 0,
-        display: "flex", alignItems: "center", gap: isMobile ? 6 : 10,
-        padding: isMobile ? "0 10px" : "0 14px",
+        height: isMobile ? 84 : 48, flexShrink: 0,
+        display: "flex", flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "stretch" : "center", gap: 10,
+        padding: "6px 14px",
         borderBottom: "1px solid rgba(0,200,255,0.18)",
         background: "rgba(3,11,18,0.98)", backdropFilter: "blur(8px)",
-        zIndex: 30, overflowX: "auto",
+        zIndex: 30,
       }}>
-        {/* brand */}
-        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-          <Layers size={13} style={{ color:"#00c8ff" }} />
-          {!isMobile && (
-            <span style={{ fontFamily:"monospace", fontSize:9, textTransform:"uppercase",
-              letterSpacing:"0.12em", color:"rgba(255,255,255,0.35)", whiteSpace:"nowrap" }}>
-              GNL1Z · AP-C3MR™
-            </span>
-          )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+          {/* Brand Flag */}
+          <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+            <Layers size={13} style={{ color:"#00c8ff" }} />
+            {!isMobile && (
+              <span style={{ fontFamily:"monospace", fontSize:9, textTransform:"uppercase",
+                letterSpacing:"0.12em", color:"rgba(255,255,255,0.35)", whiteSpace:"nowrap" }}>
+                GNL1Z · AP-C3MR™
+              </span>
+            )}
+          </div>
+
+          {/* Core Text Live-Search Input Engine */}
+          <div style={{ position: "relative", flex: isMobile ? "1" : "none", width: isMobile ? "auto" : "210px" }}>
+            <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
+            <input 
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={L("Search engineering tags...", "Filtrer les repères...")}
+              style={{
+                width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,200,255,0.15)",
+                borderRadius: 4, padding: "4px 8px 4px 26px", fontSize: 11, color: "#fff", outline: "none",
+                fontFamily: "monospace"
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>
+                <X size={10} />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* section filters — scrollable on mobile */}
-        <div style={{ display:"flex", gap:4, overflowX:"auto", flexShrink:1,
+        {/* Section Loops Filter Rows */}
+        <div style={{ display:"flex", gap:4, overflowX:"auto", flexShrink:1, alignItems: "center",
           scrollbarWidth:"none", msOverflowStyle:"none" }}>
           {(["all", ...Object.keys(SECT)] as (Section | "all")[]).map(s => {
             const active = filter === s;
             const color  = s === "all" ? "#fff"         : SECT[s as Section].color;
             const bg     = s === "all" ? "rgba(255,255,255,0.1)" : SECT[s as Section].bg;
             const bord   = s === "all" ? "rgba(255,255,255,0.2)" : SECT[s as Section].border;
-            const lbl    = s === "all" ? "ALL"
-              : L(SECT[s as Section].en, SECT[s as Section].fr);
+            const lbl    = s === "all" ? "ALL" : L(SECT[s as Section].en, SECT[s as Section].fr);
             return (
               <button key={s} onClick={() => setFilter(s)}
                 style={{
-                  fontFamily: "monospace", fontSize: isMobile ? 8 : 9,
+                  fontFamily: "monospace", fontSize: 9,
                   textTransform: "uppercase", letterSpacing: "0.06em",
-                  padding: isMobile ? "3px 7px" : "3px 8px",
-                  borderRadius: 3, cursor: "pointer", flexShrink: 0,
+                  padding: "3px 8px", borderRadius: 3, cursor: "pointer", flexShrink: 0,
                   border: `1px solid ${active ? bord : "rgba(255,255,255,0.1)"}`,
                   background: active ? bg : "transparent",
                   color: active ? color : "rgba(255,255,255,0.3)",
@@ -461,34 +485,32 @@ export default function SmartProcessFlow() {
               </button>
             );
           })}
-        </div>
 
-        {/* zoom controls */}
-        <div style={{ display:"flex", alignItems:"center", gap:4, marginLeft:"auto", flexShrink:0 }}>
-          {[
-            { icon:<ZoomIn size={11}/>,    fn:() => applyZoom(0.25) },
-            { icon:<ZoomOut size={11}/>,   fn:() => applyZoom(-0.25) },
-            { icon:<RotateCcw size={11}/>, fn:resetView },
-          ].map((b, i) => (
-            <button key={i} onClick={b.fn} style={{
-              background:"transparent", border:"1px solid rgba(0,200,255,0.2)",
-              borderRadius:3, color:"rgba(255,255,255,0.45)",
-              width:24, height:24, display:"grid", placeItems:"center", cursor:"pointer",
-            }}>{b.icon}</button>
-          ))}
-          {!isMobile && (
-            <span style={{ fontFamily:"monospace", fontSize:9,
-              color:"rgba(255,255,255,0.25)", width:36, textAlign:"right" }}>
-              {Math.round(scale * 100)}%
-            </span>
-          )}
+          {/* Scaling Utilities Indicators */}
+          <div style={{ display:"flex", alignItems:"center", gap:4, marginLeft: isMobile ? 12 : "auto", flexShrink:0 }}>
+            {[
+              { icon:<ZoomIn size={11}/>,    fn:() => applyZoom(0.25) },
+              { icon:<ZoomOut size={11}/>,   fn:() => applyZoom(-0.25) },
+              { icon:<RotateCcw size={11}/>, fn:resetView },
+            ].map((b, i) => (
+              <button key={i} onClick={b.fn} style={{
+                background:"transparent", border:"1px solid rgba(0,200,255,0.2)",
+                borderRadius:3, color:"rgba(255,255,255,0.45)",
+                width:24, height:24, display:"grid", placeItems:"center", cursor:"pointer",
+              }}>{b.icon}</button>
+            ))}
+            {!isMobile && (
+              <span style={{ fontFamily:"monospace", fontSize:9, color:"rgba(255,255,255,0.25)", width:36, textAlign:"right" }}>
+                {Math.round(scale * 100)}%
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ═══ BODY ═══ */}
+      {/* ═══ INTERACTIVE PROCESS VIEWPORT CANVAS ═══ */}
       <div style={{ flex:1, display:"flex", minHeight:0, position:"relative" }}>
-
-        {/* ═══ CANVAS ═══ */}
+        
         <div
           ref={wrapRef}
           style={{
@@ -502,401 +524,284 @@ export default function SmartProcessFlow() {
           onPointerLeave={onPointerUp}
           onClick={() => { if (!isDragging.current) setSelected(null); }}
         >
-          {/* transformable inner */}
+          {/* Dynamic Transform Matrix Wrapper Box */}
           <div style={{
             position:"absolute", inset:0,
             transform:`translate(${offset.x}px,${offset.y}px) scale(${scale})`,
             transformOrigin:"center center",
             transition: isDragging.current ? "none" : "transform 0.06s ease-out",
+            display: "grid",
+            placeItems: "center"
           }}>
+            
+            {/* FIX: Intrinsic Aspect-Ratio Wrapper to lock coordinate systems boundaries */}
+            <div style={{
+              position: "relative",
+              width: "100%",
+              maxWidth: "1218px",
+              aspectRatio: "1218 / 934",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)"
+            }}>
+              <img
+                src="/pfd/gnl1z-pfd-labeled.png"
+                alt="GNL1Z Labeled Process Flow Diagram"
+                draggable={false}
+                onError={e => { (e.target as HTMLImageElement).src = "/pfd/gnl1z-pfd.jpg"; }}
+                style={{
+                  width:"100%", height:"100%", display:"block",
+                  filter:"brightness(0.85) contrast(1.08) saturate(0.9)",
+                  userSelect:"none", pointerEvents:"none",
+                }}
+              />
 
-            {/* PFD image */}
-            <img
-              src="/pfd/gnl1z-pfd-labeled.png"
-              alt="GNL1Z Vue Générale du Procédé"
-              draggable={false}
-              onError={e => { (e.target as HTMLImageElement).src = "/pfd/gnl1z-pfd.jpg"; }}
-              style={{
-                width:"100%", height:"100%", objectFit:"contain", display:"block",
-                filter:"brightness(0.85) contrast(1.08) saturate(0.9)",
-                userSelect:"none", pointerEvents:"none", WebkitUserDrag:"none" as never,
-              }}
-            />
+              {/* ═══ VECTOR TAG OVERLAY ITERATION LOOP ═══ */}
+              {visibleTags.map(t => {
+                const isActive = selected?.id === t.id;
+                const isHov    = hovered === t.id;
+                const c        = SECT[t.section];
+                
+                /* FIX: Execute JSON verification lookup, cascade seamlessly to dataset coordinates fallback */
+                const coord = getCoordinate(t.diag) ?? { x: t.x, y: t.y };
 
-            {/* ═══ TAG BUTTONS ═══ */}
-            {visibleTags.map(t => {
-              const isActive = selected?.id === t.id;
-              const isHov    = hovered === t.id;
-              const c        = SECT[t.section];
+                /* Safety Fallback: Escape bounds array rendering breakages if both positions vanish */
+                if (coord.x === undefined || coord.y === undefined) return null;
 
-              return (
-                <button
-                  key={t.id}
-                  onMouseEnter={() => setHovered(t.id)}
-                  onMouseLeave={() => setHovered(null)}
-                  onPointerDown={e => e.stopPropagation()}
-                  onClick={e => {
-                    e.stopPropagation();
-                    if (!isDragging.current) setSelected(isActive ? null : t);
-                  }}
-                  style={{
-                    position: "absolute",
-                    const coord = getCoordinate(t.diag);
-          left: `${coord.x}%`,
-            top: `${coord.y}%`,
-                    transform: `translate(-50%,-50%) scale(${isActive ? 1.18 : isHov ? 1.08 : 1})`,
-                    /* Mobile: larger hit area */
-                    minWidth:  isMobile ? 44 : 0,
-                    minHeight: isMobile ? 28 : 0,
-                    fontFamily: "monospace",
-                    fontSize: isMobile ? 9 : 10,
-                    lineHeight: 1.25,
-                    whiteSpace: "nowrap",
-                    textAlign: "center",
-                    padding: isMobile ? "3px 7px" : "2px 6px",
-                    borderRadius: 3,
-                    cursor: "pointer",
-                    border: `1px solid ${isActive || isHov ? c.border : "rgba(0,200,255,0.3)"}`,
-                    background: isActive
-                      ? c.bg
-                      : isHov
-                        ? "rgba(0,200,255,0.12)"
-                        : "rgba(3,11,18,0.82)",
-                    color: isActive || isHov ? c.color : "rgba(255,255,255,0.72)",
-                    backdropFilter: "blur(4px)",
-                    boxShadow: isActive
-                      ? `0 0 14px ${c.border}`
-                      : isHov
-                        ? "0 0 8px rgba(0,200,255,0.28)"
-                        : "none",
-                    transition: "all 0.12s",
-                    zIndex: isActive ? 25 : isHov ? 20 : 10,
-                    userSelect: "none",
-                    /* touch devices — no hover state flicker */
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  {t.diag}
-                </button>
-              );
-            })}
+                return (
+                  <div 
+                    key={t.id}
+                    style={{
+                      position: "absolute",
+                      left: `${coord.x}%`,
+                      top: `${coord.y}%`,
+                      transform: "translate(-50%, -50%)",
+                      zIndex: isActive ? 25 : isHov ? 20 : 10,
+                    }}
+                  >
+                    {/* Visual Coordinate Alignment Check Targeting Reticle */}
+                    {DEBUG_COORDINATES && (
+                      <div style={{
+                        position: "absolute", left: 0, top: 0, width: 6, height: 6,
+                        borderRadius: "50%", background: "#ff4d6a", transform: "translate(-50%, -50%)",
+                        boxShadow: "0 0 4px #ff4d6a", pointerEvents: "none"
+                      }} />
+                    )}
+
+                    <button
+                      onMouseEnter={() => setHovered(t.id)}
+                      onMouseLeave={() => setHovered(null)}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (!isDragging.current) setSelected(isActive ? null : t);
+                      }}
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: isMobile ? 9 : 10,
+                        lineHeight: 1.25,
+                        whiteSpace: "nowrap",
+                        padding: isMobile ? "3px 7px" : "2px 6px",
+                        borderRadius: 3,
+                        cursor: "pointer",
+                        border: `1px solid ${isActive || isHov ? c.border : "rgba(0,200,255,0.3)"}`,
+                        background: isActive ? c.bg : isHov ? "rgba(0,200,255,0.12)" : "rgba(3,11,18,0.85)",
+                        color: isActive || isHov ? c.color : "rgba(255,255,255,0.75)",
+                        backdropFilter: "blur(4px)",
+                        boxShadow: isActive ? `0 0 14px ${c.border}` : isHov ? "0 0 8px rgba(0,200,255,0.28)" : "none",
+                        transition: "all 0.12s",
+                        userSelect: "none",
+                        WebkitTapHighlightColor: "transparent",
+                        transform: `scale(${isActive ? 1.12 : isHov ? 1.05 : 1})`,
+                      }}
+                    >
+                      {t.diag}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
           </div>
         </div>
 
-        {/* ═══ SIDE PANEL (desktop) / BOTTOM SHEET (mobile) ═══ */}
-        {selected && sc && (
-          isMobile
-            /* ── MOBILE BOTTOM SHEET ── */
-            ? (
-              <div
-                style={{
-                  position: "absolute", bottom: 0, left: 0, right: 0,
-                  background: "rgba(5,14,24,0.98)",
-                  borderTop: `2px solid ${sc.border}`,
-                  borderRadius: "14px 14px 0 0",
-                  zIndex: 40, maxHeight: "62vh",
-                  display: "flex", flexDirection: "column",
-                  boxShadow: "0 -8px 32px rgba(0,0,0,0.6)",
-                  backdropFilter: "blur(12px)",
-                }}
-              >
-                {/* drag handle */}
-                <div style={{ display:"flex", justifyContent:"center", padding:"8px 0 4px" }}>
-                  <div style={{ width:36, height:4, borderRadius:2, background:"rgba(255,255,255,0.2)" }}/>
-                </div>
-                {/* header */}
-                <div style={{ padding:"0 16px 10px", display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
-                  <div>
-                    <div style={{ fontFamily:"monospace", fontSize:9, color:"rgba(255,255,255,0.35)", marginBottom:3 }}>
-                      {selected.diag}
-                    </div>
-                    <div style={{ fontWeight:700, fontSize:17, lineHeight:1.1 }}>
-                      {L(selected.nameEn, selected.nameFr)}
-                    </div>
-                    <div style={{
-                      display:"inline-flex", alignItems:"center", gap:4, marginTop:6,
-                      fontFamily:"monospace", fontSize:9, textTransform:"uppercase",
-                      padding:"2px 7px", borderRadius:2,
-                      border:`1px solid ${sc.border}`, background:sc.bg, color:sc.color,
-                    }}>
-                      <span style={{ width:5, height:5, borderRadius:"50%", background:sc.color, display:"inline-block" }}/>
-                      {L(sc.en, sc.fr)}
-                    </div>
-                  </div>
-                  <button onClick={() => setSelected(null)} style={{
-                    background:"transparent", border:"1px solid rgba(255,255,255,0.15)",
-                    borderRadius:4, color:"rgba(255,255,255,0.4)",
-                    width:26, height:26, display:"grid", placeItems:"center", cursor:"pointer",
-                    flexShrink:0, marginLeft:8,
-                  }}><X size={12}/></button>
-                </div>
-                {/* scrollable content */}
-                <div style={{ flex:1, overflowY:"auto", padding:"0 16px 20px" }}>
-                  <PanelContent
-                    tag={selected} eq={eq} sc={sc}
-                    instruments={instruments}
-                    onDcsClick={(url, title) => setLightbox({ url, title })}
-                    L={L} isMobile
-                  />
-                </div>
+        {/* ── DESKTOP CONTROL DRAWERS PANELS ── */}
+        {!isMobile && selected && sc && (
+          <div style={{
+            width: 380, borderLeft: "1px solid rgba(0,200,255,0.15)",
+            background: "rgba(4,12,22,0.98)", backdropFilter: "blur(12px)",
+            display: "flex", flexDirection: "column", zIndex: 28,
+          }}>
+            <div style={{ padding: 16, borderBottom: "1px solid rgba(255,255,255,0.08)", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div>
+                <span style={{ fontFamily:"monospace", fontSize:10, color:sc.color }}>{selected.diag}</span>
+                <h2 style={{ fontSize:18, fontWeight:600, margin:"4px 0" }}>{L(selected.nameEn, selected.nameFr)}</h2>
+                <span style={{ fontSize:10, padding:"2px 6px", borderRadius:2, border:`1px solid ${sc.border}`, background:sc.bg, color:sc.color, textTransform:"uppercase", fontFamily:"monospace" }}>
+                  {L(sc.en, sc.fr)}
+                </span>
               </div>
-            )
-            /* ── DESKTOP SIDE PANEL ── */
-            : (
-              <div style={{
-                width: 360, flexShrink: 0,
-                borderLeft: `1px solid ${sc.border}`,
-                background: "rgba(5,14,24,0.97)",
-                display: "flex", flexDirection: "column",
-                transition: "width 0.22s cubic-bezier(0.4,0,0.2,1)",
-              }}>
-                {/* header */}
-                <div style={{
-                  padding: "14px 16px",
-                  borderBottom: `1px solid ${sc.border}`,
-                  position: "sticky", top: 0,
-                  background: "rgba(5,14,24,0.98)",
-                  backdropFilter: "blur(8px)", zIndex: 5, flexShrink: 0,
-                }}>
-                  <button onClick={() => setSelected(null)} style={{
-                    position:"absolute", top:10, right:10,
-                    background:"transparent", border:"1px solid rgba(255,255,255,0.15)",
-                    borderRadius:3, color:"rgba(255,255,255,0.4)",
-                    width:22, height:22, cursor:"pointer", display:"grid", placeItems:"center",
-                  }}><X size={11}/></button>
-                  <div style={{ fontFamily:"monospace", fontSize:9, color:"rgba(255,255,255,0.32)", marginBottom:3 }}>
-                    {selected.diag}
-                  </div>
-                  <div style={{ fontWeight:700, fontSize:18, lineHeight:1.1, paddingRight:28 }}>
-                    {L(selected.nameEn, selected.nameFr)}
-                  </div>
-                  <div style={{
-                    display:"inline-flex", alignItems:"center", gap:4, marginTop:8,
-                    fontFamily:"monospace", fontSize:9, textTransform:"uppercase", letterSpacing:"0.07em",
-                    padding:"2px 8px", borderRadius:2,
-                    border:`1px solid ${sc.border}`, background:sc.bg, color:sc.color,
-                  }}>
-                    <span style={{ width:5, height:5, borderRadius:"50%", background:sc.color, display:"inline-block" }}/>
-                    {L(sc.en, sc.fr)}
-                  </div>
-                </div>
-                {/* body */}
-                <div style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}
-                  className="[&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-thumb]:bg-white/10">
-                  <PanelContent
-                    tag={selected} eq={eq} sc={sc}
-                    instruments={instruments}
-                    onDcsClick={(url, title) => setLightbox({ url, title })}
-                    L={L} isMobile={false}
-                  />
-                </div>
+              <button onClick={() => setSelected(null)} style={{ background:"transparent", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer" }}><X size={16}/></button>
+            </div>
+            <div style={{ flex:1, overflowY:"auto", padding:16 }}>
+              <PanelContent tag={selected} lang={lang} onPreviewDcs={(title, path) => setLightbox({ url: dcsUrl(path), title })} />
+            </div>
+          </div>
+        )}
+
+        {/* ── MOBILE BOTTOM FLOATING SHEETS ── */}
+        {isMobile && selected && sc && (
+          <div
+            style={{
+              position: "absolute", bottom: 0, left: 0, right: 0,
+              background: "rgba(5,14,24,0.98)", borderTop: `2px solid ${sc.border}`,
+              borderRadius: "14px 14px 0 0", zIndex: 40, maxHeight: "62vh",
+              display: "flex", flexDirection: "column", backdropFilter: "blur(12px)",
+              boxShadow: "0 -8px 32px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div style={{ display:"flex", justifyContent:"center", padding:"8px 0 4px" }}>
+              <div style={{ width:36, height:4, borderRadius:2, background:"rgba(255,255,255,0.2)" }}/>
+            </div>
+            <div style={{ padding:"0 16px 10px", display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
+              <div>
+                <div style={{ fontFamily:"monospace", fontSize:9, color:"rgba(255,255,255,0.35)" }}>{selected.diag}</div>
+                <div style={{ fontWeight:700, fontSize:17 }}>{L(selected.nameEn, selected.nameFr)}</div>
               </div>
-            )
+              <button onClick={() => setSelected(null)} style={{ background:"transparent", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, color:"rgba(255,255,255,0.4)", width:26, height:26, display:"grid", placeItems:"center" }}><X size={12}/></button>
+            </div>
+            <div style={{ flex:1, overflowY:"auto", padding:"0 16px 20px" }}>
+              <PanelContent tag={selected} lang={lang} onPreviewDcs={(title, path) => setLightbox({ url: dcsUrl(path), title })} />
+            </div>
+          </div>
         )}
       </div>
 
-      {/* ═══ STATUS BAR (desktop only) ═══ */}
-      {!isMobile && (
-        <div style={{
-          height:28, flexShrink:0,
-          display:"flex", alignItems:"center", gap:12, padding:"0 14px",
-          borderTop:"1px solid rgba(0,200,255,0.08)",
-          background:"rgba(3,11,18,0.9)",
-          fontFamily:"monospace", fontSize:9, color:"rgba(255,255,255,0.22)",
-        }}>
-          <span style={{ width:5, height:5, borderRadius:"50%", background:"#00e5a0",
-            animation:"gnlpulse 2s infinite", flexShrink:0 }}/>
-          <span>GNL1Z · AP-C3MR™ · 6 Trains · Arzew/Bethioua</span>
-          {hovered && (
-            <span style={{ color:"rgba(0,200,255,0.7)" }}>
-              {TAGS.find(t => t.id === hovered)?.diag ?? ""}
-            </span>
-          )}
-          <span style={{ marginLeft:"auto" }}>
-            Scroll = zoom · Drag = pan · Click tag = inspect · Esc = close
-          </span>
-        </div>
-      )}
-
-      {/* ═══ DCS LIGHTBOX ═══ */}
+      {/* ═══ LIGHTBOX OVERLAY WINDOWS FOR DCS GRAPHICS ═══ */}
       {lightbox && (
-        <div onClick={() => setLightbox(null)} style={{
-          position:"fixed", inset:0, background:"rgba(0,0,0,0.93)",
-          zIndex:200, display:"grid", placeItems:"center", cursor:"zoom-out",
-        }}>
-          <img src={lightbox.url} alt={lightbox.title} style={{
-            maxWidth:"92vw", maxHeight:"88vh",
-            borderRadius:6, border:"1px solid rgba(0,200,255,0.25)",
-          }}/>
-          <div style={{
-            position:"fixed", bottom:20, left:"50%", transform:"translateX(-50%)",
-            fontFamily:"monospace", fontSize:10, color:"rgba(255,255,255,0.45)",
-            background:"rgba(0,0,0,0.72)", padding:"4px 14px", borderRadius:20,
-            pointerEvents:"none",
-          }}>{lightbox.title} · tap to close</div>
+        <div 
+          onClick={() => setLightbox(null)}
+          style={{
+            position:"fixed", inset:0, background:"rgba(2,6,12,0.94)",
+            display:"grid", placeItems:"center", zIndex:200, padding:20, backdropFilter:"blur(6px)"
+          }}
+        >
+          <div style={{ position:"relative", maxWidth:"95vw", maxHeight:"90vh" }} onClick={e => e.stopPropagation()}>
+            <div style={{ position:"absolute", top:-32, left:0, right:0, display:"flex", justifyContent:"space-between", color:"#fff" }}>
+              <span style={{ fontFamily:"monospace", fontSize:12 }}>{lightbox.title}</span>
+              <button onClick={() => setLightbox(null)} style={{ background:"transparent", border:"none", color:"#fff", cursor:"pointer" }}><X size={16}/></button>
+            </div>
+            <img src={lightbox.url} alt="DCS Console Screen Preview" style={{ width:"100%", height:"100%", objectFit:"contain", border:"1px solid rgba(255,255,255,0.12)", borderRadius:4 }} />
+          </div>
         </div>
       )}
-
-      <style>{`@keyframes gnlpulse{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
     </div>
   );
 }
 
-/* ─── Shared panel content (desktop + mobile bottom sheet) ──────────────── */
-function PanelContent({
-  tag, eq, sc, instruments, onDcsClick, L, isMobile,
-}: {
-  tag: TagDef;
-  eq: ReturnType<typeof getEquipmentByTag>;
-  sc: { color: string; bg: string; border: string; en: string; fr: string };
-  instruments: string[];
-  onDcsClick: (url: string, title: string) => void;
-  L: (en: string, fr: string) => string;
-  isMobile: boolean;
-}) {
-  const cellStyle = {
-    background:"#071828", border:"1px solid rgba(0,200,255,0.1)",
-    borderRadius:4, padding:"6px 8px",
-  };
+/* ─── DATA COMPONENT SIDEBAR CONTENT HOOKS ───────────────────────────────── */
+function PanelContent({ tag, lang, onPreviewDcs }: { tag: TagDef; lang: string; onPreviewDcs: (title: string, path: string) => void }) {
+  const L = (en: string, fr: string) => lang === "fr" ? fr : en;
+  
+  const filteredDcs = useMemo(() => DCS.filter(d => tag.dcsPanels.includes(d.id)), [tag.dcsPanels]);
+  const filteredManuals = useMemo(() => MANUALS.filter(m => tag.manuals.includes(m.id)), [tag.manuals]);
+  
+  /* FIX: Calculate localized loop systems tags via useMemo hooks optimizing layout cycles */
+  const linkedInstruments = useMemo(() => {
+    return [...new Set(tag.dcsPanels.flatMap(pid => INSTR[pid] ?? []))].slice(0, 24);
+  }, [tag.dcsPanels]);
 
   return (
-    <>
-      {/* description */}
-      <Blk title={L("Description", "Description")}>
-        <p style={{ fontSize:12, color:"rgba(255,255,255,0.58)", lineHeight:1.65 }}>{tag.descEn}</p>
-      </Blk>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Description Field */}
+      <div>
+        <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 4 }}>
+          {L("Equipment Description", "Description de l'Équipement")}
+        </h4>
+        <p style={{ fontSize: 13, lineHeight: 1.4, color: "rgba(255,255,255,0.85)" }}>{tag.descEn}</p>
+      </div>
 
-      {/* specs */}
-      {(Object.keys(tag.specs).length > 0 || eq) && (
-        <Blk title={L("Technical Data", "Données Techniques")}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:5 }}>
-            {Object.entries(tag.specs).map(([k,v]) => (
-              <div key={k} style={cellStyle}>
-                <div style={{ fontFamily:"monospace", fontSize:8, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", marginBottom:2 }}>{k}</div>
-                <div style={{ fontFamily:"monospace", fontSize:11, color:"#fff" }}>{v}</div>
+      {/* Asset Specifications Fields */}
+      {Object.keys(tag.specs).length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Technical Details", "Détails Techniques")}
+          </h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {Object.entries(tag.specs).map(([key, val]) => (
+              <div key={key} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: 3 }}>
+                <span style={{ color: "rgba(255,255,255,0.5)" }}>{key}</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 500, color: key === "Status" && val === "DEROGATION" ? "#ff4d6a" : "#fff" }}>{val}</span>
               </div>
             ))}
-            {eq && (
-              <>
-                <div style={cellStyle}>
-                  <div style={{ fontFamily:"monospace", fontSize:8, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", marginBottom:2 }}>Spare Parts</div>
-                  <div style={{ fontFamily:"monospace", fontSize:11, color:"#fff" }}>{eq.spare_parts.count} refs</div>
-                </div>
-                <div style={cellStyle}>
-                  <div style={{ fontFamily:"monospace", fontSize:8, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", marginBottom:2 }}>Unit</div>
-                  <div style={{ fontFamily:"monospace", fontSize:11, color:"#fff" }}>{eq.unit}</div>
-                </div>
-              </>
-            )}
           </div>
-        </Blk>
+        </div>
       )}
 
-      {/* equipment link */}
-      <Blk title={L("Equipment File", "Fiche Équipement")}>
-        {tag.dbTag ? (
-          <Link
-            to={`/equipment/${encodeURIComponent(tag.dbTag)}`}
-            style={{
-              display:"flex", alignItems:"center", justifyContent:"space-between",
-              padding:"10px 13px", borderRadius:5, textDecoration:"none",
-              border:`1px solid ${sc.border}`, background:sc.bg, color:sc.color,
-              fontSize:13, fontWeight:600,
-            }}>
-            <span>{L("Open Equipment File", "Ouvrir la Fiche")}</span>
-            <span style={{ fontFamily:"monospace", fontSize:9 }}>{tag.dbTag}</span>
-          </Link>
-        ) : (
-          <p style={{ fontSize:11, color:"rgba(255,255,255,0.28)", fontStyle:"italic" }}>
-            {L("No record — consult operational manuals.", "Pas de fiche — voir manuels opérationnels.")}
-          </p>
-        )}
-      </Blk>
-
-      {/* DCS screenshots */}
-      {tag.dcsPanels.length > 0 && (
-        <Blk title={<><Cpu size={9} style={{ display:"inline", marginRight:4 }}/>{L(`DCS Screens (${tag.dcsPanels.length})`, `Écrans DCS (${tag.dcsPanels.length})`)}</>}>
-          <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr 1fr" : "1fr 1fr", gap:5 }}>
-            {tag.dcsPanels.map(pid => {
-              const p = DCS.find(d => d.id === pid);
-              if (!p) return null;
-              const url = dcsUrl(p.path);
-              return (
-                <div key={pid}
-                  onClick={() => onDcsClick(url, p.title)}
-                  style={{
-                    borderRadius:4, overflow:"hidden",
-                    border:"1px solid rgba(0,200,255,0.14)",
-                    background:"#060f1a", cursor:"pointer",
-                    transition:"border-color 0.14s",
-                  }}>
-                  <img src={url} alt={p.title} loading="lazy"
-                    style={{ width:"100%", aspectRatio:"16/9", objectFit:"cover", display:"block", filter:"brightness(0.8)" }}
-                    onError={e => (e.target as HTMLElement).parentElement!.style.display = "none"}
-                  />
-                  <div style={{ padding:"3px 5px", fontFamily:"monospace", fontSize:7, color:"rgba(255,255,255,0.3)", lineHeight:1.3 }}>
-                    {p.title}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Blk>
-      )}
-
-      {/* instrument tags */}
-      {instruments.length > 0 && (
-        <Blk title={L("Instrument Tags", "Tags Instruments")}>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-            {instruments.map(t => (
-              <span key={t} style={{
-                fontFamily:"monospace", fontSize:8, padding:"2px 6px", borderRadius:2,
-                background:"rgba(0,200,255,0.07)", border:"1px solid rgba(0,200,255,0.18)",
-                color:"rgba(0,200,255,0.7)",
-              }}>{t}</span>
+      {/* Linked DCS Console Interfaces */}
+      {filteredDcs.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Linked DCS Panels", "Écrans DCS Associés")} ({filteredDcs.length})
+          </h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {filteredDcs.map(d => (
+              <button
+                key={d.id}
+                onClick={() => onPreviewDcs(d.title, d.path)}
+                style={{
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 4, padding: "6px 8px", textAlign: "left", cursor: "pointer",
+                  color: "#00c8ff", display: "flex", alignItems: "center", justifyContent: "space-between"
+                }}
+              >
+                <span style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 4 }}>{d.title}</span>
+                <ExternalLink size={10} style={{ opacity: 0.7, flexShrink: 0 }} />
+              </button>
             ))}
           </div>
-        </Blk>
+        </div>
       )}
 
-      {/* manuals */}
-      {tag.manuals.length > 0 && (
-        <Blk title={<><BookOpen size={9} style={{ display:"inline", marginRight:4 }}/>{L("Operational Manuals", "Manuels Opérationnels")}</>}>
-          {tag.manuals.map(mid => {
-            const m = MANUALS.find(x => x.id === mid);
-            if (!m) return null;
-            return (
-              <a key={mid}
+      {/* Telemetry Loops Tags Nodes */}
+      {linkedInstruments.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Telemetry Tags", "Instruments de Télémesure")}
+          </h4>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: "110px", overflowY: "auto", paddingRight: 4 }}>
+            {linkedInstruments.map(ins => (
+              <span key={ins} style={{ fontFamily: "monospace", fontSize: 10, background: "rgba(0,229,160,0.08)", border: "1px solid rgba(0,229,160,0.2)", color: "#00e5a0", padding: "1px 4px", borderRadius: 2 }}>
+                {ins}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Associated Operating Manual Documents */}
+      {filteredManuals.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Operational Manuals", "Manuels Opérationnels")}
+          </h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {filteredManuals.map(m => (
+              <a
+                key={m.id}
                 href={`https://drive.google.com/file/d/${m.driveId}/view`}
                 target="_blank" rel="noopener noreferrer"
                 style={{
-                  display:"flex", alignItems:"center", gap:8,
-                  padding:"8px 10px", borderRadius:4, marginBottom:5,
-                  border:"1px solid rgba(255,255,255,0.07)",
-                  background:"#060f1a", color:"rgba(255,255,255,0.5)",
-                  fontSize:12, textDecoration:"none",
-                }}>
-                <span style={{ fontFamily:"monospace", fontSize:8, color:"#00c8ff", flexShrink:0 }}>{m.id}</span>
-                <span style={{ flex:1 }}>{m.title}</span>
-                <ExternalLink size={10} style={{ opacity:0.35, flexShrink:0 }}/>
+                  display: "flex", alignItems: "center", gap: 8, fontSize: 12,
+                  color: "#fb923c", textDecoration: "none", background: "rgba(251,146,60,0.05)",
+                  border: "1px solid rgba(251,146,60,0.15)", borderRadius: 4, padding: "6px 10px"
+                }}
+              >
+                <BookOpen size={12} />
+                <span style={{ flex: 1 }}>{m.title}</span>
+                <ExternalLink size={10} />
               </a>
-            );
-          })}
-        </Blk>
+            ))}
+          </div>
+        </div>
       )}
-    </>
-  );
-}
-
-/* ─── tiny block helper ─────────────────────────────────────────────────── */
-function Blk({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div style={{ padding:"11px 0 10px", borderBottom:"1px solid rgba(0,200,255,0.07)", marginBottom:0 }}>
-      <div style={{
-        fontFamily:"monospace", fontSize:8, textTransform:"uppercase",
-        letterSpacing:"0.12em", color:"rgba(255,255,255,0.25)", marginBottom:8,
-      }}>{title}</div>
-      {children}
     </div>
   );
-    }
+           }
