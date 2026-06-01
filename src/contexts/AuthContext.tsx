@@ -1,41 +1,21 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+// src/context/AuthContext.js
+import { createContext, useContext, useState, useEffect } from 'react';
 
-interface AuthCtx {
-  user: User | null;
-  session: Session | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
-}
+const AuthContext = createContext({});
 
-const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true, signOut: async () => {} });
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listener first (per Supabase best practice)
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
-      setSession(s);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
+    // 1. Check local storage tokens or backend session on mount
+    // 2. Set up active session listeners
+    setLoading(false);
   }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
-
   return (
-    <Ctx.Provider value={{ user: session?.user ?? null, session, loading, signOut }}>
-      {children}
-    </Ctx.Provider>
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
+      {!loading && children}
+    </AuthContext.Provider>
   );
-}
-
-export const useAuth = () => useContext(Ctx);
+};
