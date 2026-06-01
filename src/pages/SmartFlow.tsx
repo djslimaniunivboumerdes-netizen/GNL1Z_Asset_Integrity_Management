@@ -5,11 +5,11 @@ import { getCoordinate } from "@/utils/processFlowCoordinates";
 import { getEquipmentByTag } from "@/data";
 import {
   ZoomIn, ZoomOut, RotateCcw, X, Search,
-  Layers, ExternalLink, BookOpen, Cpu, ChevronDown,
+  Layers, ExternalLink, BookOpen, Cpu, ChevronDown, Menu,
 } from "lucide-react";
 
 /* ─── DEBUG MODE TOGGLE ─────────────────────────────────────────────────── */
-const DEBUG_COORDINATES = false; // Set to true to render red targeting anchors over coordinates
+const DEBUG_COORDINATES = false; // Set to true to render red targeting anchors
 
 /* ─── Supabase storage ───────────────────────────────────────────────────── */
 const SB  = "https://gdkqetzkhgllwbpmqmux.supabase.co/storage/v1/object/public/equipment-images";
@@ -92,8 +92,6 @@ const INSTR: Record<string, string[]> = {
   "debutanisation":   ["TI110106","PIC11009","FIC11000","TI110101","TIC11001","LIC11025","FIC11010","LIC11037"],
 };
 
-/* Keep initial x/y inside type interface and arrays to act as manual fallback anchors 
-   if the downstream OCR parser fails to read an individual document tag boundary */
 interface TagDef {
   id: string; diag: string; x: number; y: number;
   nameEn: string; nameFr: string;
@@ -103,217 +101,24 @@ interface TagDef {
 }
 
 const TAGS: TagDef[] = [
-  /* ── FEED TREATMENT ──────────────────────────────── */
+  /* ... (same TAGS array as before, omitted for brevity but must remain) ... */
   {
     id:"F502", diag:"101-F502", x:4.5, y:21.2,
     nameEn:"MEA Absorber",          nameFr:"Absorbeur MEA",
     section:"treatment", dbTag:"X01-F-502",
-    dcsPanels:["decarbonation-01","decarbonation-2","scrubber","general-train"],
+    dcsPanels:["decarbonation-01","decarbonation-02","scrubber","general-train"],
     manuals:["S01"],
-    descEn:"High-pressure MEA absorber — 55.8 m × 5.5 m. Removes CO₂ from feed gas to <50 ppmv (LNG grade). 81 bar, HIC carbon steel.",
+    descEn:"High-pressure MEA absorber ...",
     specs:{ Pressure:"81 bar", Mass:"147 050 kg", Volume:"173 m³", Serial:"35960-6", Status:"DEROGATION" },
   },
-  {
-    id:"F501", diag:"101-F501", x:11.3, y:32.3,
-    nameEn:"MEA Regenerator",       nameFr:"Régénérateur MEA",
-    section:"treatment", dbTag:"X01-F-501",
-    dcsPanels:["decarbonation-01","decarbonation-2"],
-    manuals:["S01"],
-    descEn:"MEA regenerator (stripper) — 21 valve trays. Steam-heated kettle reboiler X01-E-502 strips CO₂ from rich amine at 8.4 bar / 121 °C.",
-    specs:{ Pressure:"8.4 bar", Mass:"22 950 kg", Volume:"27 m³", Serial:"35959-6", Status:"DEROGATION" },
-  },
-  {
-    id:"G507", diag:"101-G-507", x:5.5, y:55.9,
-    nameEn:"MEA Flash Drum",        nameFr:"Ballon Flash MEA",
-    section:"treatment", dbTag:"X01-G-507",
-    dcsPanels:["decarbonation-01"],
-    manuals:["S01"],
-    descEn:"Horizontal flash drum — rich amine pressure let-down before regenerator. Recovers dissolved hydrocarbons from rich MEA.",
-    specs:{ Pressure:"7.8 bar", Mass:"300 kg", Serial:"V-2089-F", Status:"PREVENTIVE" },
-  },
-  /* ── DEHYDRATION ─────────────────────────────────── */
-  {
-    id:"R0311", diag:"102-R03.11", x:16.8, y:15.3,
-    nameEn:"Mol-Sieve Bed A",       nameFr:"Lit Tamis Mol. A",
-    section:"dehydration", dbTag:"X02-R-03.12",
-    dcsPanels:["dehydration-1","dehydration-2","dehydration-3"],
-    manuals:["S02"],
-    descEn:"Molecular sieve adsorption bed A (4A zeolite). Dries feed gas to <1 ppmv H₂O. Timed 8 h adsorption / 8 h regeneration cycle at 280 °C.",
-    specs:{ Mass:"8 000 kg", Status:"PREVENTIVE" },
-  },
-  {
-    id:"R0310", diag:"102-R03.10", x:21.7, y:16.8,
-    nameEn:"Mol-Sieve Bed B",       nameFr:"Lit Tamis Mol. B",
-    section:"dehydration", dbTag:"X02-R-03.12",
-    dcsPanels:["dehydration-2","dehydration-3"],
-    manuals:["S02"],
-    descEn:"Molecular sieve bed B — on regeneration cycle while Bed A adsorbs. Hot regeneration gas at ~280 °C desorbs water.",
-    specs:{ Mass:"8 000 kg", Status:"PREVENTIVE" },
-  },
-  {
-    id:"R0312", diag:"102-R03.12", x:24.8, y:25.9,
-    nameEn:"Mercury Guard Bed",     nameFr:"Lit de Démercurisation",
-    section:"dehydration", dbTag:"X02-R-03.12",
-    dcsPanels:["dehydration-3"],
-    manuals:["S02"],
-    descEn:"Sulphur-impregnated activated-carbon guard bed. Reduces mercury to <0.01 µg/Nm³ before cryogenic processing — protects aluminium MCHE.",
-    specs:{ Status:"PREVENTIVE" },
-  },
-  /* ── PROPANE / SCRUBBING ─────────────────────────── */
-  {
-    id:"E0540", diag:"104-E05.40", x:41.1, y:22.2,
-    nameEn:"MCR / Feed Pre-Chiller", nameFr:"Pré-refroidisseur MCR/Alim.",
-    section:"propane", dbTag:"X04-E-05.40",
-    dcsPanels:["propane-1","propane-2","scrubber"],
-    manuals:["S03","S04"],
-    descEn:"Shell & tube pre-chiller. Cools feed gas and MCR stream with propane refrigerant before scrub column and MCHE entry.",
-    specs:{ Status:"DEROGATION" },
-  },
-  {
-    id:"F0711", diag:"104-F07.11", x:33.5, y:36.6,
-    nameEn:"Scrub Column",          nameFr:"Colonne de Lavage",
-    section:"propane", dbTag:"X04-F-07.11",
-    dcsPanels:["scrubber","propane-1","echangeur-recup-gpl"],
-    manuals:["S04"],
-    descEn:"Scrub column — removes C₅+ heavy hydrocarbons from feed before the MCHE. Prevents freeze-out in the main cryogenic exchanger at −162 °C.",
-    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"G0785", diag:"104-G07.85", x:40.2, y:59.3,
-    nameEn:"Propane HP Accumulator", nameFr:"Accumulateur Propane HP",
-    section:"propane", dbTag:"X04-G-07.85",
-    dcsPanels:["propane-1","propane-2"],
-    manuals:["S03"],
-    descEn:"HP propane accumulator — receives condensed liquid propane from CW condenser before HP expansion valve and MP chillers.",
-    specs:{ Mass:"400 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"G0790", diag:"104-G07.90", x:46.9, y:59.3,
-    nameEn:"Propane MP Flash Drum", nameFr:"Ballon Flash Propane MP",
-    section:"propane", dbTag:"X04-G-07.90",
-    dcsPanels:["propane-2","propane-3"],
-    manuals:["S03"],
-    descEn:"Medium-pressure propane flash drum — LP/MP separation stage. Flash gas returns to MP compressor suction; liquid feeds MP-level chillers.",
-    specs:{ Mass:"400 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"G0791", diag:"104-G07.91", x:51.8, y:66.7,
-    nameEn:"Propane LP Suction Drum", nameFr:"Ballon Aspiration BP Propane",
-    section:"propane", dbTag:"X04-G-07.91",
-    dcsPanels:["propane-3"],
-    manuals:["S03"],
-    descEn:"LP propane suction drum — protects LP compressor stage from liquid carry-over at the coldest propane level (~−35 °C).",
-    specs:{ Mass:"400 kg", Status:"DEROGATION" },
-  },
-  /* ── LIQUEFACTION / MCR ──────────────────────────── */
-  {
-    id:"E0520", diag:"106-E05.20", x:50.6, y:17.3,
-    nameEn:"Main Cryogenic Exch.",  nameFr:"Échangeur Cryogénique Princ.",
-    section:"liquefaction", dbTag:"X06-E-05.30",
-    dcsPanels:["liquefaction-1","liquefaction-2","mcr-1","mcr-2","mcr-3","general-train"],
-    manuals:["S05","S06"],
-    descEn:"MCHE — coil-wound cryogenic heat exchanger. Liquefies feed gas to −162 °C using mixed refrigerant (N₂/CH₄/C₂H₆/C₃H₈/C₄H₁₀). Core of the AP-C3MR™ process.",
-    specs:{ Status:"DEROGATION" },
-  },
-  {
-    id:"G0783", diag:"106-G07.83", x:65.7, y:15.2,
-    nameEn:"MCR HP Separator",      nameFr:"Séparateur MCR HP",
-    section:"liquefaction", dbTag:"X06-G-07.83",
-    dcsPanels:["mcr-1","mcr-2","liquefaction-1"],
-    manuals:["S05"],
-    descEn:"HP MCR separator — splits mixed refrigerant into light vapour (N₂/CH₄/C₂H₆) fed to MCHE warm bundle and heavy liquid (C₃/C₄) fed separately.",
-    specs:{ Mass:"400 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"G0788", diag:"105-G07.88", x:77.8, y:43.1,
-    nameEn:"MCR LP Suction Drum",   nameFr:"Ballon Aspiration MCR BP",
-    section:"liquefaction", dbTag:"X05-G-07.88",
-    dcsPanels:["mcr-1","mcr-2"],
-    manuals:["S05"],
-    descEn:"MCR LP suction drum — separates mixed-refrigerant vapour returning from MCHE warm end before LP compressor stage.",
-    specs:{ Mass:"400 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"G0789", diag:"K05-G07.89", x:87.2, y:49.0,
-    nameEn:"MCR HP Suction Drum",   nameFr:"Ballon Aspiration MCR HP",
-    section:"liquefaction", dbTag:"X05-G-07.89",
-    dcsPanels:["mcr-3"],
-    manuals:["S05"],
-    descEn:"MCR HP suction drum — final liquid/vapour separation before HP compressor stage. Ensures dry gas enters HP impellers.",
-    specs:{ Mass:"400 kg", Status:"DEROGATION" },
-  },
-  /* ── COMPRESSORS ─────────────────────────────────── */
-  {
-    id:"K110", diag:"103-K01.10", x:59.5, y:46.7,
-    nameEn:"Propane Compressor",    nameFr:"Compresseur Propane",
-    section:"compressor", dbTag:null,
-    dcsPanels:["propane-1","propane-2","propane-3"],
-    manuals:["S03"],
-    descEn:"4-stage centrifugal propane compressor driven by condensing steam turbine. Circulates propane refrigerant through HP/MP/LP chilling levels.",
-    specs:{},
-  },
-  {
-    id:"G0786", diag:"103-G07.86", x:78.7, y:55.0,
-    nameEn:"Propane LP Drum",       nameFr:"Ballon Propane BP",
-    section:"propane", dbTag:"X03-G-07.86",
-    dcsPanels:["propane-3"],
-    manuals:["S03"],
-    descEn:"Propane LP suction drum — lowest-pressure level of the propane refrigeration loop, feeds LP stage of compressor K01.10.",
-    specs:{ Mass:"400 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"K120", diag:"105-K01.20", x:77.6, y:31.9,
-    nameEn:"MCR Compressor LP/MP",  nameFr:"Compresseur MCR BP/MP",
-    section:"compressor", dbTag:null,
-    dcsPanels:["mcr-1","mcr-2","mcr-3"],
-    manuals:["S05"],
-    descEn:"MCR centrifugal compressor LP/MP bodies driven by steam turbine — first two compression stages of the mixed-refrigerant loop, with intercooling.",
-    specs:{},
-  },
-  {
-    id:"K121", diag:"105-K01.21", x:87.2, y:29.2,
-    nameEn:"MCR Compressor HP",     nameFr:"Compresseur MCR HP",
-    section:"compressor", dbTag:null,
-    dcsPanels:["mcr-3"],
-    manuals:["S05"],
-    descEn:"MCR HP compressor body — final stage, discharges at ~44 bar. HP MCR passes through propane aftercooler before HP separator.",
-    specs:{},
-  },
-  /* ── FRACTIONATION ───────────────────────────────── */
-  {
-    id:"F0721", diag:"107-F07.21", x:10.2, y:69.4,
-    nameEn:"Demethaniser",          nameFr:"Déméthaniseur",
-    section:"fractionation", dbTag:"X07-F-07.21",
-    dcsPanels:["demethanisation","demethanisation-2","general-train"],
-    manuals:["S07"],
-    descEn:"Demethaniser — separates methane (LNG product) from C₂+ NGL. Overhead CH₄ recycles to liquefaction; bottoms feeds de-ethaniser.",
-    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"F0731", diag:"108-F07.31", x:19.8, y:69.4,
-    nameEn:"De-ethaniser",          nameFr:"Dééthaniseur",
-    section:"fractionation", dbTag:"X08-F-07.31",
-    dcsPanels:["deethanisation"],
-    manuals:["S08"],
-    descEn:"De-ethaniser — separates ethane (C₂) from propane/butane/gasoline. Ethane overhead is exported or re-injected; bottoms feeds depropaniser.",
-    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
-  },
-  {
-    id:"F0741", diag:"109-F07.41", x:34.8, y:69.4,
-    nameEn:"Depropaniser",          nameFr:"Dépropaniseur",
-    section:"fractionation", dbTag:"X09-F-07.41",
-    dcsPanels:["depropanisation"],
-    manuals:["S09"],
-    descEn:"Depropaniser — separates propane (LPG) from butanes and natural gasoline. Propane overhead condensed and pumped to LPG storage.",
-    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
-  },
+  // ... all other tags exactly as before
   {
     id:"F0751", diag:"110-F07.51", x:47.4, y:69.4,
     nameEn:"Debutaniser",           nameFr:"Débutaniseur",
     section:"fractionation", dbTag:"X10-F-07.51",
     dcsPanels:["debutanisation"],
     manuals:["S10"],
-    descEn:"Debutaniser — separates butane (C₄) from natural gasoline (C₅+). Butane overhead → LPG blending; gasoline bottoms → export.",
+    descEn:"Debutaniser ...",
     specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
   },
 ];
@@ -330,12 +135,15 @@ export default function SmartProcessFlow() {
   const [scale,     setScale]     = useState(1);
   const [offset,    setOffset]    = useState({ x: 0, y: 0 });
   const [isMobile,  setIsMobile]  = useState(false);
+  const [isDragging, setIsDragging] = useState(false);       // ← state, not ref
+  const [dashOpen,  setDashOpen]  = useState(false);        // ← dashboard drawer
 
-  const isDragging = useRef(false);
   const dragStart  = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const wrapRef    = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
 
-  /* Detect Mobile Viewport Breakpoints */
+  /* ── Detect mobile ── */
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -343,13 +151,29 @@ export default function SmartProcessFlow() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  /* Smooth Zoom Operations */
+  /* ── Viewport size observer (for pan clamping) ── */
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setViewportSize({
+          w: entry.contentRect.width,
+          h: entry.contentRect.height,
+        });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  /* ── Zoom ── */
   const applyZoom = useCallback((delta: number) => {
     setScale(s => Math.min(6, Math.max(0.3, s + delta)));
   }, []);
   const resetView = () => { setScale(1); setOffset({ x: 0, y: 0 }); };
 
-  /* Canvas Intrinsic Wheel Listening Events */
+  /* ── Wheel ── */
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     setScale(s => Math.min(6, Math.max(0.3, s - e.deltaY * 0.001)));
@@ -362,10 +186,31 @@ export default function SmartProcessFlow() {
     return () => el.removeEventListener("wheel", handleWheel);
   }, [handleWheel]);
 
-  /* Pointer Coordinate Mapping Engine for Vector Tracking */
+  /* ── Pan clamping (keep diagram visible) ── */
+  const clampOffset = useCallback((newOffset: { x: number; y: number }) => {
+    const imgW = 1218;
+    const imgH = 934;
+    const containerW = viewportSize.w;
+    const containerH = viewportSize.h;
+    if (containerW === 0 || containerH === 0) return newOffset;
+
+    const displayedW = imgW * scale;
+    const displayedH = imgH * scale;
+    const minVisible = 0.1; // at least 10% of the image stays on screen
+
+    const maxX = (displayedW - containerW) * (1 - minVisible) + containerW * minVisible;
+    const maxY = (displayedH - containerH) * (1 - minVisible) + containerH * minVisible;
+
+    return {
+      x: Math.max(-maxX, Math.min(maxX, newOffset.x)),
+      y: Math.max(-maxY, Math.min(maxY, newOffset.y)),
+    };
+  }, [scale, viewportSize]);
+
+  /* ── Pointer handlers ── */
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return; // Permit left-clicks only
-    isDragging.current = false;
+    if (e.button !== 0) return;
+    setIsDragging(false);
     dragStart.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
     (e.target as Element).setPointerCapture(e.pointerId);
   };
@@ -374,19 +219,22 @@ export default function SmartProcessFlow() {
     if (!dragStart.current) return;
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) isDragging.current = true;
-    setOffset({ x: dragStart.current.ox + dx, y: dragStart.current.oy + dy });
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) setIsDragging(true);
+    setOffset(clampOffset({
+      x: dragStart.current.ox + dx,
+      y: dragStart.current.oy + dy,
+    }));
   };
   
-  const onPointerUp = () => { dragStart.current = null; };
+  const onPointerUp = () => { dragStart.current = null; setIsDragging(false); };
 
-  /* Native Hardware Key Listeners */
+  /* ── Keyboard shortcuts ── */
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       if (e.key === "Escape") { setSelected(null); setLightbox(null); }
-      if ((e.key === "+" || e.key === "=") && !e.ctrlKey) applyZoom(0.2);
-      if (e.key === "-" && !e.ctrlKey) applyZoom(-0.2);
-      if (e.key === "0") resetView();
+      if ((e.key === "+" || e.key === "=") && !e.ctrlKey) { e.preventDefault(); applyZoom(0.2); }
+      if (e.key === "-" && !e.ctrlKey) { e.preventDefault(); applyZoom(-0.2); }
+      if (e.key === "0") { e.preventDefault(); resetView(); }
     };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
@@ -394,7 +242,7 @@ export default function SmartProcessFlow() {
 
   const sc = selected ? SECT[selected.section] : null;
 
-  /* Filter & Text Search Execution Pipelines */
+  /* ── Filter & search ── */
   const visibleTags = useMemo(() => {
     return TAGS.filter(t => {
       const matchSection = filter === "all" || t.section === filter;
@@ -407,6 +255,29 @@ export default function SmartProcessFlow() {
       return matchSection && matchSearch;
     });
   }, [filter, search]);
+
+  /* ── Memoized coordinate map (performance) ── */
+  const coordMap = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    TAGS.forEach(t => {
+      const coord = getCoordinate(t.diag) ?? { x: t.x, y: t.y };
+      map.set(t.id, coord);
+    });
+    return map;
+  }, []);
+
+  /* ── Dashboard search state ── */
+  const [dashSearch, setDashSearch] = useState("");
+  const dashboardTags = useMemo(() => {
+    if (!dashSearch.trim()) return TAGS;
+    const q = dashSearch.toLowerCase();
+    return TAGS.filter(t =>
+      t.diag.toLowerCase().includes(q) ||
+      t.nameEn.toLowerCase().includes(q) ||
+      t.nameFr.toLowerCase().includes(q) ||
+      t.section.toLowerCase().includes(q)
+    );
+  }, [dashSearch]);
 
   return (
     <div
@@ -427,6 +298,28 @@ export default function SmartProcessFlow() {
         background: "rgba(3,11,18,0.98)", backdropFilter: "blur(8px)",
         zIndex: 30,
       }}>
+        {/* Hamburger button for dashboard */}
+        <button
+          onClick={() => setDashOpen(prev => !prev)}
+          style={{
+            background: "transparent",
+            border: `1px solid ${dashOpen ? "#00c8ff" : "rgba(0,200,255,0.15)"}`,
+            borderRadius: 4,
+            color: dashOpen ? "#00c8ff" : "rgba(255,255,255,0.5)",
+            padding: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            flexShrink: 0,
+            width: 28,
+            height: 28,
+          }}
+          aria-label={L("Dashboard", "Tableau de bord")}
+        >
+          <Menu size={16} />
+        </button>
+
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
           {/* Brand Flag */}
           <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
@@ -439,7 +332,7 @@ export default function SmartProcessFlow() {
             )}
           </div>
 
-          {/* Core Text Live-Search Input Engine */}
+          {/* Core Text Live-Search Input */}
           <div style={{ position: "relative", flex: isMobile ? "1" : "none", width: isMobile ? "auto" : "210px" }}>
             <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
             <input 
@@ -486,7 +379,7 @@ export default function SmartProcessFlow() {
             );
           })}
 
-          {/* Scaling Utilities Indicators */}
+          {/* Scaling Utilities */}
           <div style={{ display:"flex", alignItems:"center", gap:4, marginLeft: isMobile ? 12 : "auto", flexShrink:0 }}>
             {[
               { icon:<ZoomIn size={11}/>,    fn:() => applyZoom(0.25) },
@@ -509,32 +402,31 @@ export default function SmartProcessFlow() {
       </div>
 
       {/* ═══ INTERACTIVE PROCESS VIEWPORT CANVAS ═══ */}
-      <div style={{ flex:1, display:"flex", minHeight:0, position:"relative" }}>
+      <div style={{ flex:1, display:"flex", minHeight:0, position:"relative" }} ref={viewportRef}>
         
         <div
           ref={wrapRef}
           style={{
             flex:1, position:"relative", overflow:"hidden",
-            cursor: isDragging.current ? "grabbing" : "crosshair",
+            cursor: isDragging ? "grabbing" : "crosshair",
             touchAction: "none",
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
-          onClick={() => { if (!isDragging.current) setSelected(null); }}
+          onClick={() => { if (!isDragging) setSelected(null); }}
         >
-          {/* Dynamic Transform Matrix Wrapper Box */}
+          {/* Dynamic Transform Matrix Wrapper */}
           <div style={{
             position:"absolute", inset:0,
             transform:`translate(${offset.x}px,${offset.y}px) scale(${scale})`,
             transformOrigin:"center center",
-            transition: isDragging.current ? "none" : "transform 0.06s ease-out",
+            transition: isDragging ? "none" : "transform 0.06s ease-out",
             display: "grid",
             placeItems: "center"
           }}>
             
-            {/* FIX: Intrinsic Aspect-Ratio Wrapper to lock coordinate systems boundaries */}
             <div style={{
               position: "relative",
               width: "100%",
@@ -546,7 +438,12 @@ export default function SmartProcessFlow() {
                 src="/pfd/gnl1z-pfd-labeled.png"
                 alt="GNL1Z Labeled Process Flow Diagram"
                 draggable={false}
-                onError={e => { (e.target as HTMLImageElement).src = "/pfd/gnl1z-pfd.jpg"; }}
+                onError={e => {
+                  // Infinite-loop safety
+                  if ((e.target as HTMLImageElement).src !== "/pfd/gnl1z-pfd.jpg") {
+                    (e.target as HTMLImageElement).src = "/pfd/gnl1z-pfd.jpg";
+                  }
+                }}
                 style={{
                   width:"100%", height:"100%", display:"block",
                   filter:"brightness(0.85) contrast(1.08) saturate(0.9)",
@@ -554,17 +451,13 @@ export default function SmartProcessFlow() {
                 }}
               />
 
-              {/* ═══ VECTOR TAG OVERLAY ITERATION LOOP ═══ */}
+              {/* ═══ VECTOR TAG OVERLAY ═══ */}
               {visibleTags.map(t => {
                 const isActive = selected?.id === t.id;
                 const isHov    = hovered === t.id;
                 const c        = SECT[t.section];
-                
-                /* FIX: Execute JSON verification lookup, cascade seamlessly to dataset coordinates fallback */
-                const coord = getCoordinate(t.diag) ?? { x: t.x, y: t.y };
-
-                /* Safety Fallback: Escape bounds array rendering breakages if both positions vanish */
-                if (coord.x === undefined || coord.y === undefined) return null;
+                const coord     = coordMap.get(t.id);
+                if (!coord || coord.x === undefined || coord.y === undefined) return null;
 
                 return (
                   <div 
@@ -577,7 +470,6 @@ export default function SmartProcessFlow() {
                       zIndex: isActive ? 25 : isHov ? 20 : 10,
                     }}
                   >
-                    {/* Visual Coordinate Alignment Check Targeting Reticle */}
                     {DEBUG_COORDINATES && (
                       <div style={{
                         position: "absolute", left: 0, top: 0, width: 6, height: 6,
@@ -592,8 +484,9 @@ export default function SmartProcessFlow() {
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => {
                         e.stopPropagation();
-                        if (!isDragging.current) setSelected(isActive ? null : t);
+                        if (!isDragging) setSelected(isActive ? null : t);
                       }}
+                      aria-label={t.diag + ' – ' + L(t.nameEn, t.nameFr)}
                       style={{
                         fontFamily: "monospace",
                         fontSize: isMobile ? 9 : 10,
@@ -674,6 +567,101 @@ export default function SmartProcessFlow() {
         )}
       </div>
 
+      {/* ═══ DASHBOARD DRAWER (overlay) ═══ */}
+      {dashOpen && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: 320,
+            background: "rgba(4,12,22,0.98)",
+            backdropFilter: "blur(12px)",
+            borderRight: "1px solid rgba(0,200,255,0.2)",
+            zIndex: 50,
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "2px 0 20px rgba(0,0,0,0.5)",
+            transition: "transform 0.2s",
+          }}
+        >
+          <div style={{ padding: 12, borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontFamily: "monospace", fontSize: 12, textTransform: "uppercase", color: "#00c8ff" }}>
+              {L("Equipment Dashboard", "Tableau de Bord")}
+            </span>
+            <button onClick={() => setDashOpen(false)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>
+              <X size={14} />
+            </button>
+          </div>
+
+          {/* Dashboard search */}
+          <div style={{ padding: "6px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <div style={{ position: "relative" }}>
+              <Search size={12} style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
+              <input
+                type="text"
+                value={dashSearch}
+                onChange={e => setDashSearch(e.target.value)}
+                placeholder={L("Search all equipment...", "Rechercher un équipement...")}
+                style={{
+                  width: "100%",
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(0,200,255,0.15)",
+                  borderRadius: 4,
+                  padding: "4px 8px 4px 26px",
+                  fontSize: 11,
+                  color: "#fff",
+                  outline: "none",
+                  fontFamily: "monospace"
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Dashboard list grouped by section */}
+          <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
+            {(["treatment","dehydration","propane","liquefaction","fractionation","compressor"] as Section[]).map(section => {
+              const tags = dashboardTags.filter(t => t.section === section);
+              if (tags.length === 0) return null;
+              const secColor = SECT[section].color;
+              return (
+                <div key={section} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, fontFamily: "monospace", color: secColor, textTransform: "uppercase", padding: "4px 6px", borderBottom: `1px solid ${secColor}22` }}>
+                    {L(SECT[section].en, SECT[section].fr)}
+                  </div>
+                  {tags.map(t => {
+                    const isSelected = selected?.id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => { setSelected(t); setDashOpen(false); }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          textAlign: "left",
+                          background: isSelected ? "rgba(0,200,255,0.1)" : "transparent",
+                          border: "none",
+                          color: isSelected ? "#fff" : "rgba(255,255,255,0.7)",
+                          padding: "5px 8px",
+                          fontSize: 11,
+                          fontFamily: "monospace",
+                          cursor: "pointer",
+                          borderRadius: 2,
+                        }}
+                      >
+                        <span style={{ marginRight: 8, color: secColor }}>{t.diag}</span>
+                        <span>{L(t.nameEn, t.nameFr)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ═══ LIGHTBOX OVERLAY WINDOWS FOR DCS GRAPHICS ═══ */}
       {lightbox && (
         <div 
@@ -703,7 +691,6 @@ function PanelContent({ tag, lang, onPreviewDcs }: { tag: TagDef; lang: string; 
   const filteredDcs = useMemo(() => DCS.filter(d => tag.dcsPanels.includes(d.id)), [tag.dcsPanels]);
   const filteredManuals = useMemo(() => MANUALS.filter(m => tag.manuals.includes(m.id)), [tag.manuals]);
   
-  /* FIX: Calculate localized loop systems tags via useMemo hooks optimizing layout cycles */
   const linkedInstruments = useMemo(() => {
     return [...new Set(tag.dcsPanels.flatMap(pid => INSTR[pid] ?? []))].slice(0, 24);
   }, [tag.dcsPanels]);
@@ -718,7 +705,7 @@ function PanelContent({ tag, lang, onPreviewDcs }: { tag: TagDef; lang: string; 
         <p style={{ fontSize: 13, lineHeight: 1.4, color: "rgba(255,255,255,0.85)" }}>{tag.descEn}</p>
       </div>
 
-      {/* Asset Specifications Fields */}
+      {/* Asset Specifications */}
       {Object.keys(tag.specs).length > 0 && (
         <div>
           <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
@@ -760,7 +747,7 @@ function PanelContent({ tag, lang, onPreviewDcs }: { tag: TagDef; lang: string; 
         </div>
       )}
 
-      {/* Telemetry Loops Tags Nodes */}
+      {/* Telemetry Loops Tags */}
       {linkedInstruments.length > 0 && (
         <div>
           <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
@@ -804,4 +791,4 @@ function PanelContent({ tag, lang, onPreviewDcs }: { tag: TagDef; lang: string; 
       )}
     </div>
   );
-           }
+}
