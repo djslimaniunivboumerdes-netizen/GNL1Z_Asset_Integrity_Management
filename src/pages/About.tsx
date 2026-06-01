@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { META, EQUIPMENT, SECTIONS } from "@/data";
-import { Factory, MapPin, Layers, Activity, Calendar, Gauge, Droplets, Wind } from "lucide-react";
+import { GNL1Z_ASSETS } from "@/utils/assets";
+import { Factory, MapPin, Layers, Activity, Calendar, Gauge, Droplets, Wind, Image as ImageIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import sonatrachLogo from "@/assets/sonatrach-logo.png";
 
@@ -48,13 +49,38 @@ export default function About() {
       <Section title={lang === "en" ? "Process flow" : "Schéma du procédé"}>
         {lang === "en"
           ? "Feed natural gas from Hassi R'Mel arrives at the inlet scrubber, then passes through MEA decarbonation (X01) to remove CO₂ down to LNG-grade specification. Dehydration (X02) on molecular sieves drops moisture below 1 ppmv. The dry gas is cooled in propane chillers (X05) before entering the main cryogenic exchanger (MCR loop, X04 / X06) where it liquefies at approximately −162 °C. Heavier components are recovered and routed to the demethaniser, deethaniser, depropaniser and debutaniser columns (X07–X10) for LPG and natural gasoline production."
-          : "Le gaz naturel d'alimentation provenant de Hassi R'Mel arrive au scrubber d'entrée puis passe par la décarbonatation MEA (X01) pour éliminer le CO₂ aux spécifications GNL. La déshydratation (X02) sur tamis moléculaires abaisse l'humidité sous 1 ppmv. Le gaz sec est refroidi dans les chillers propane (X05) avant d'entrer dans l'échangeur cryogénique principal (boucle MCR, X04 / X06) où il se liquéfie à environ −162 °C. Les composants plus lourds sont récupérés et envoyés vers les colonnes déméthaniseur, déethaniseur, dépropaniseur et débutaniseur (X07–X10) pour la production de GPL et essence naturelle."}
+          : "Le gaz naturel d'alimentation provenant de Hassi R'Mel arrives au scrubber d'entrée puis passe par la décarbonatation MEA (X01) pour éliminer le CO₂ aux spécifications GNL. La déshydratation (X02) sur tamis moléculaires abaisse l'humidité sous 1 ppmv. Le gaz sec est refroidi dans les chillers propane (X05) avant d'entrer dans l'échangeur cryogénique principal (boucle MCR, X04 / X06) où it se liquéfie à environ −162 °C. Les composants plus lourds sont récupérés et envoyés vers les colonnes déméthaniseur, déethaniseur, dépropaniseur et débutaniseur (X07–X10) pour la production de GPL et essence naturelle."}
       </Section>
 
       <Section title={lang === "en" ? "Process sections covered" : "Sections procédé couvertes"}>
         <div className="flex flex-wrap gap-2 mt-2">
           {SECTIONS.map((s) => (
             <span key={s} className="px-3 py-1.5 rounded border border-border bg-secondary/60 text-sm font-mono">{s}</span>
+          ))}
+        </div>
+      </Section>
+
+      {/* ─── NEW FACILITY GALLERY SECTION ─── */}
+      <Section title={lang === "en" ? "Facility & Equipment Views" : "Vues de l'installation et des équipements"}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
+          {GNL1Z_ASSETS.about.map((imgSrc, idx) => (
+            <div 
+              key={idx} 
+              className="group relative border border-border rounded-lg overflow-hidden bg-card aspect-video shadow-sm hover:border-accent/30 transition-colors"
+            >
+              <img
+                src={imgSrc}
+                alt={`GNL1Z Technical Asset View ${idx + 1}`}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end p-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  <ImageIcon className="h-3 w-3 text-accent" />
+                  <span>Asset View {idx + 1}</span>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </Section>
