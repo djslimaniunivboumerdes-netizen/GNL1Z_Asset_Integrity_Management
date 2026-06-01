@@ -26,28 +26,24 @@ const heroSlides = [
     image: "https://images.unsplash.com/photo-1581094120546-4971c461356e?auto=format&fit=crop&q=80&w=1600"
   },
   {
-    id: "compression",
     tag: "Unit 30",
     nameEn: "MCR Centrifugal Compressors",
     nameFr: "Compresseurs Centrifuges MCR",
     image: "https://images.unsplash.com/photo-1537462715879-360eeb61a0bc?auto=format&fit=crop&q=80&w=1600"
   },
   {
-    id: "containment",
     tag: "Unit 50",
     nameEn: "Cryogenic LNG Storage Tanks",
     nameFr: "Bacs de Stockage Cryogénique GNL",
     image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=1600"
   },
   {
-    id: "marine",
     tag: "Unit 60",
     nameEn: "Marine Loading Berth Infrastructure",
     nameFr: "Infrastructures d'Appontement Maritime",
     image: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&q=80&w=1600"
   },
   {
-    id: "utilities",
     tag: "Unit 70",
     nameEn: "Steam Generation & Boiler Systems",
     nameFr: "Génération de Vapeur & Chaudières",
@@ -59,7 +55,6 @@ export default function Dashboard() {
   const { t, lang } = useI18n();
   const [slideIndex, setSlideIndex] = useState(0);
 
-  // Automatically cycle through background graphics every 5 seconds
   useEffect(() => {
     const sequence = setInterval(() => {
       setSlideIndex((prev) => (prev + 1) % heroSlides.length);
@@ -70,9 +65,9 @@ export default function Dashboard() {
   return (
     <div className="industrial-grid">
       {/* Hero Container with Sliding Backdrops */}
-      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center">
+      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center bg-background">
         
-        {/* Layer 1: Sliding Backdrops */}
+        {/* Layer 1: Sliding Backdrops (Boosted visibility to 45%) */}
         <div className="absolute inset-0 z-0">
           {heroSlides.map((slide, idx) => (
             <div
@@ -80,14 +75,14 @@ export default function Dashboard() {
               className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
               style={{ 
                 backgroundImage: `url(${slide.image})`,
-                opacity: idx === slideIndex ? 0.22 : 0 
+                opacity: idx === slideIndex ? 0.45 : 0 
               }}
             />
           ))}
         </div>
 
-        {/* Layer 2: Theme / Industrial Color Mask & Safety Striping */}
-        <div className="absolute inset-0 bg-gradient-industrial opacity-95 z-10" />
+        {/* Layer 2: Fixed Text Scrim (Gradually fades out to let the image shine on the right side) */}
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40安全 z-10" />
         <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
 
         {/* Layer 3: Interactive Text Details */}
@@ -96,24 +91,24 @@ export default function Dashboard() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="h-2 w-2 rounded-full bg-accent animate-pulse-accent" />
-                <span className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-white/70 font-mono">
+                <span className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-white/90 font-mono bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm">
                   {META.process} · {META.trains} {t("trains")}
                 </span>
               </div>
-              <h1 className="text-4xl md:text-6xl font-display font-bold text-white leading-[0.95] tracking-tight">
+              <h1 className="text-4xl md:text-6xl font-display font-bold text-white leading-[0.95] tracking-tight drop-shadow-sm">
                 GNL1Z<span className="text-accent">.</span>
               </h1>
-              <p className="mt-3 text-base md:text-xl text-white/80 max-w-2xl font-light">
+              <p className="mt-3 text-base md:text-xl text-white/90 max-w-2xl font-light drop-shadow">
                 {lang === "en"
                   ? "Industrial Asset Management for the Sonatrach Arzew/Bethioua liquefaction complex."
                   : "Gestion d'actifs industriels pour le complexe de liquéfaction Sonatrach Arzew/Bethioua."}
               </p>
             </div>
 
-            {/* Subtle live indicator pinpointing the current backdrop sector */}
-            <div className="hidden lg:block border border-white/10 bg-black/20 backdrop-blur-md rounded px-3 py-2 text-right max-w-xs self-end">
+            {/* Backdrop location ticker */}
+            <div className="border border-white/10 bg-black/50 backdrop-blur-md rounded px-3 py-2 text-left md:text-right max-w-xs self-start md:self-end shadow-xl">
               <span className="text-[9px] font-mono text-accent uppercase tracking-widest block mb-0.5">
-                ✦ Background Monitored Sector
+                ✦ Active Sector View
               </span>
               <span className="text-xs font-bold text-white/90 line-clamp-1">
                 {heroSlides[slideIndex].tag} — {lang === "en" ? heroSlides[slideIndex].nameEn : heroSlides[slideIndex].nameFr}
@@ -181,9 +176,9 @@ export default function Dashboard() {
 
 function Stat({ icon: Icon, label, value, mono }: { icon: LucideIcon; label: string; value: string | number; mono?: boolean }) {
   return (
-    <div className="bg-white/5 backdrop-blur border border-white/10 rounded p-3 md:p-4">
-      <div className="flex items-center gap-2 text-white/60 text-[10px] uppercase tracking-widest mb-2">
-        <Icon className="h-3 w-3" />
+    <div className="bg-white/5 backdrop-blur border border-white/10 rounded p-3 md:p-4 shadow-inner">
+      <div className="flex items-center gap-2 text-white/70 text-[10px] uppercase tracking-widest mb-2">
+        <Icon className="h-3 w-3 text-accent" />
         {label}
       </div>
       <div className={`text-xl md:text-2xl font-bold text-white ${mono ? "font-mono" : "font-display"}`}>{value}</div>
