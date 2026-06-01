@@ -1,9 +1,10 @@
+// src/pages/News.tsx
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Newspaper, TrendingUp, BarChart3, RefreshCw, Globe,
   AlertTriangle, Clock, Wifi, WifiOff, CheckCircle2,
-  Flame, Ship, Factory, DollarSign,
+  Flame, Ship, Factory, DollarSign, Image as ImageIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/contexts/I18nContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { GNL1Z_ASSETS } from "@/utils/assets";
 import newsHero from "@/assets/news-hero.jpg";
 import sonatrachLogo from "@/assets/sonatrach-logo.png";
-
 
 /* ─── Types ─── */
 interface PriceItem {
@@ -77,8 +78,6 @@ function normalizeData(raw: unknown): NewsData {
 
 async function loadFromCache(): Promise<{ data: NewsData; ageMs: number } | null> {
   try {
-    // news_cache is not in the auto-generated types — use a plain JS approach
-    // that avoids brittle TypeScript casts which can fail at runtime.
     const res = await (supabase as unknown as {
       from: (table: string) => {
         select: (cols: string) => {
@@ -106,7 +105,6 @@ async function fetchFresh(
   signal: AbortSignal,
   force = false,
 ): Promise<{ data: NewsData; fromCache: boolean; ageMs: number }> {
-  // 1 — Try shared Supabase cache first (unless forced)
   if (!force) {
     const cached = await loadFromCache();
     if (cached && cached.ageMs < CACHE_TTL_MS) {
@@ -114,7 +112,6 @@ async function fetchFresh(
     }
   }
 
-  // 2 — Call edge function
   try {
     const invokeResult = await supabase.functions.invoke("news-feed", {
       body: {},
@@ -123,7 +120,6 @@ async function fetchFresh(
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     const { data, error } = invokeResult ?? {};
     if (error) {
-      // Detect common "service not configured" patterns
       const msg: string = (error as { message?: string }).message ?? String(error);
       throw new Error(msg);
     }
@@ -132,14 +128,12 @@ async function fetchFresh(
     if (d.error) throw new Error(d.error);
     return { data: normalizeData(data), fromCache: false, ageMs: 0 };
   } catch (e) {
-    if (signal.aborted) throw e; // re-throw AbortError
-    // 3 — Final fallback: stale cache is better than nothing
+    if (signal.aborted) throw e;
     const stale = await loadFromCache();
     if (stale) {
       toast({ title: "Using cached data", description: "Edge function unavailable; showing last known data.", variant: "default" });
       return { data: stale.data, fromCache: true, ageMs: stale.ageMs };
     }
-    // 4 — Nothing at all — surface the error clearly
     const errMsg = e instanceof Error ? e.message : String(e);
     throw new Error(errMsg);
   }
@@ -152,7 +146,7 @@ function TrendBadge({ trend }: { trend?: "up" | "down" | "flat" }) {
   return <span className={`text-xs font-mono ${cls}`}>{trend === "up" ? "▲" : trend === "down" ? "▼" : "—"}</span>;
 }
 
-function StatGrid({ items }: { items: StatItem[] }) {
+-function StatGrid({ items }: { items: StatItem[] }) {
   if (items.length === 0) return (
     <p className="text-sm text-muted-foreground flex items-center gap-2">
       <AlertTriangle className="h-4 w-4" /> No data available
@@ -260,7 +254,6 @@ function NewsList({ items, lang, limit }: { items: NewsItem[]; lang: string; lim
   );
 }
 
-
 /* ─── Page ─── */
 export default function News() {
   const { t, lang } = useI18n();
@@ -305,7 +298,6 @@ export default function News() {
     return () => abortRef.current?.abort();
   }, [load]);
 
-  // Auto-refresh after 5 days
   useEffect(() => {
     if (!data || ageMs < CACHE_TTL_MS) return;
     const id = setTimeout(() => load(true), 2000);
@@ -346,7 +338,6 @@ export default function News() {
         </div>
       </div>
 
-
       {/* Search + controls */}
       <div className="flex flex-col md:flex-row gap-3 mb-5 items-start">
         <div className="relative flex-1">
@@ -374,6 +365,36 @@ export default function News() {
           )}
         </div>
       </div>
+
+      {/* ─── MARKET INTELLIGENCE GALLERY ─── */}
+      {!loading && GNL1Z_ASSETS.news.length > 0 && (
+        <div className="mb-8 overflow-hidden">
+          <div className="flex items-center gap-2 mb-4">
+            <ImageIcon className="h-4 w-4 text-accent" />
+            <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+              {lang === "en" ? "Market Visualization Gallery" : "Galerie de Visualisation du Marché"}
+            </h2>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
+            {GNL1Z_ASSETS.news.map((img, idx) => (
+              <div 
+                key={idx} 
+                className="shrink-0 w-64 md:w-80 h-36 md:h-44 rounded-lg border border-border overflow-hidden bg-card snap-start group relative cursor-pointer"
+              >
+                <img 
+                  src={img} 
+                  alt={`Market Intelligence ${idx + 1}`} 
+                  className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-300 group-hover:scale-105" 
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                   <span className="text-[10px] font-mono text-white/90">Insight Asset #{idx + 1}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Cache info banner */}
       {fromCache && data && (
@@ -579,5 +600,4 @@ export default function News() {
       )}
     </div>
   );
-                  }
-
+          }
