@@ -64,41 +64,40 @@ export default function Dashboard() {
 
   return (
     <div className="industrial-grid">
-      {/* Hero Container with Sliding Backdrops */}
-      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center bg-zinc-950">
+      {/* Hero Container */}
+      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center bg-zinc-950 isolation-isolate">
         
-        {/* Layer 1: Sliding Backdrops */}
-        <div className="absolute inset-0 z-0">
+        {/* Layer 1: Native Image Element Carousels (Fixes CSS compiler/grid injection issues) */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
           {heroSlides.map((slide, idx) => (
-            <div
+            <img
               key={idx}
-              className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
-              style={{ 
-                backgroundImage: `url(${slide.image})`,
-                opacity: idx === slideIndex ? 0.38 : 0 
-              }}
+              src={slide.image}
+              alt={slide.tag}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out
+                ${idx === slideIndex ? "opacity-60 animate-fade-in" : "opacity-0"}`}
             />
           ))}
         </div>
 
-        {/* Layer 2: Fixed Dark Tint Overlay (Optimized for Mobile & Text Readability) */}
-        <div className="absolute inset-0 bg-black/65 z-10" />
+        {/* Layer 2: Calibrated Dark Industrial Overlay for High-Contrast Text Legibility */}
+        <div className="absolute inset-0 bg-zinc-950/75 z-10 pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
 
         {/* Layer 3: Interactive Text Details */}
         <div className="relative px-4 md:px-10 py-12 md:py-16 max-w-7xl mx-auto z-20 w-full">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="h-2 w-2 rounded-full bg-accent animate-pulse-accent" />
-                <span className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-white/90 font-mono bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm">
+                <span className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-white/90 font-mono bg-black/50 px-2 py-0.5 rounded border border-white/5 backdrop-blur-sm">
                   {META.process} · {META.trains} {t("trains")}
                 </span>
               </div>
               <h1 className="text-4xl md:text-6xl font-display font-bold text-white leading-[0.95] tracking-tight drop-shadow-md">
                 GNL1Z<span className="text-accent">.</span>
               </h1>
-              <p className="mt-3 text-base md:text-xl text-white/90 max-w-2xl font-light drop-shadow">
+              <p className="mt-3 text-base md:text-xl text-white/95 max-w-2xl font-light drop-shadow">
                 {lang === "en"
                   ? "Industrial Asset Management for the Sonatrach Arzew/Bethioua liquefaction complex."
                   : "Gestion d'actifs industriels pour le complexe de liquéfaction Sonatrach Arzew/Bethioua."}
@@ -106,7 +105,7 @@ export default function Dashboard() {
             </div>
 
             {/* Backdrop location ticker */}
-            <div className="border border-white/10 bg-black/60 backdrop-blur-md rounded px-3 py-2 text-left md:text-right max-w-xs self-start md:self-end shadow-xl">
+            <div className="border border-white/10 bg-black/70 backdrop-blur-md rounded px-3 py-2 text-left md:text-right max-w-xs self-start md:self-end shadow-2xl">
               <span className="text-[9px] font-mono text-accent uppercase tracking-widest block mb-0.5">
                 ✦ Active Sector View
               </span>
@@ -184,4 +183,4 @@ function Stat({ icon: Icon, label, value, mono }: { icon: LucideIcon; label: str
       <div className={`text-xl md:text-2xl font-bold text-white ${mono ? "font-mono" : "font-display"}`}>{value}</div>
     </div>
   );
-}
+              }
