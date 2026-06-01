@@ -1,11 +1,23 @@
-// src/context/AuthContext.js
-import { createContext, useContext, useState, useEffect } from 'react';
+// src/contexts/AuthContext.tsx
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-const AuthContext = createContext({});
+// Define types for the context state
+interface AuthContextType {
+  user: any; // Replace 'any' with your User type if available
+  login: () => void;
+  logout: () => void;
+  loading: boolean;
+}
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Temporary function stubs to prevent 'undefined' variables
+  const login = () => {};
+  const logout = () => {};
 
   useEffect(() => {
     // 1. Check local storage tokens or backend session on mount
@@ -18,4 +30,13 @@ export const AuthProvider = ({ children }) => {
       {!loading && children}
     </AuthContext.Provider>
   );
+};
+
+// 🟢 ADD THIS HOOK TO FIX THE BUILD ERROR
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
