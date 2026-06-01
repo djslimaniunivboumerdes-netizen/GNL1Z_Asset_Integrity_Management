@@ -1,18 +1,35 @@
-import { Link } from "react-router-dom";
-import { 
-  Info, 
-  Database, 
-  Cpu, 
-  GitBranch, 
-  BookOpen, 
-  User, 
-  Newspaper, 
-  ArrowUpRight 
-} from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 
-export default function Dashboard() {
-  const { t, lang } = useI18n();
+export function DashboardHero() {
+  const { lang } = useI18n();
+
+  return (
+    <div className="relative w-full rounded-2xl overflow-hidden min-h-[320px] flex items-center bg-slate-950 border border-border/40 shadow-sm">
+      {/* Industrial Tanker Background Image with Dark Overlay */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 mix-blend-luminosity"
+        style={{ 
+          backgroundImage: `url('/assets/lng-tanker-bg.jpg')` // Replace with your actual asset path
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
+
+      {/* Cleaned Content Area */}
+      <div className="relative z-10 max-w-3xl px-6 md:px-10 py-12 space-y-4">
+        <h1 className="text-5xl md:text-6xl font-display font-extrabold tracking-tight text-foreground flex items-baseline gap-1">
+          GNL1Z
+          <span className="h-3 w-3 rounded-full bg-orange-500 inline-block translate-y-[-2px]" />
+        </h1>
+        
+        <p className="text-lg md:text-xl text-muted-foreground font-medium leading-relaxed max-w-2xl">
+          {lang === "en" 
+            ? "Industrial Asset Management for the Sonatrach Arzew/Bethioua liquefaction complex."
+            : "Gestion des actifs industriels pour le complexe de liquéfaction Sonatrach d'Arzew/Bethioua."}
+        </p>
+      </div>
+    </div>
+  );
+}
 
   // Synchronized directly with the AppSidebar operational modules
   const modules = [
