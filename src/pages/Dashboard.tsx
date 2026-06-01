@@ -1,4 +1,3 @@
-// src/pages/Index.tsx
 import { Link } from "react-router-dom";
 import { 
   Info, 
