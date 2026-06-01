@@ -1,6 +1,7 @@
 // src/pages/Dashboard.tsx
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Database, Cpu, BookOpen, User, Info, Factory, Activity, Package, Workflow, Newspaper, FileText } from "lucide-react";
+import { ArrowRight, Database, Cpu, BookOpen, User, Info, Factory, Activity, Package, Workflow, Newspaper } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { META, EQUIPMENT } from "@/data";
@@ -16,74 +17,109 @@ const moduleCards = [
   { key: "author",    to: "/author",     icon: User,      accent: false, descEn: "Project author, credentials, ORCID, contact channels and mobile app downloads.",                 descFr: "Auteur du projet, références, ORCID, canaux de contact et téléchargements de l'application."  },
 ] as const;
 
-/* ─── NEW: 5 Plant Sector Images with Multilingual Attributes ─── */
-const plantSectors = [
+/* ─── AUTOMATIC BACKGROUND SLIDES ─── */
+const heroSlides = [
   {
-    id: "mche",
     tag: "Unit 40",
-    nameEn: "Main Cryogenic Heat Exchanger",
+    nameEn: "Main Cryogenic Heat Exchanger (MCHE)",
     nameFr: "Échangeur Cryogénique Principal",
-    status: "Normal",
-    image: "https://images.unsplash.com/photo-1581094120546-4971c461356e?auto=format&fit=crop&q=80&w=600"
+    image: "https://images.unsplash.com/photo-1581094120546-4971c461356e?auto=format&fit=crop&q=80&w=1600"
   },
   {
     id: "compression",
     tag: "Unit 30",
     nameEn: "MCR Centrifugal Compressors",
     nameFr: "Compresseurs Centrifuges MCR",
-    status: "Monitoring",
-    image: "https://images.unsplash.com/photo-1537462715879-360eeb61a0bc?auto=format&fit=crop&q=80&w=600"
+    image: "https://images.unsplash.com/photo-1537462715879-360eeb61a0bc?auto=format&fit=crop&q=80&w=1600"
   },
   {
     id: "containment",
     tag: "Unit 50",
     nameEn: "Cryogenic LNG Storage Tanks",
     nameFr: "Bacs de Stockage Cryogénique GNL",
-    status: "Normal",
-    image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=600"
+    image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=1600"
   },
   {
     id: "marine",
     tag: "Unit 60",
     nameEn: "Marine Loading Berth Infrastructure",
     nameFr: "Infrastructures d'Appontement Maritime",
-    status: "Standby",
-    image: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&q=80&w=600"
+    image: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&q=80&w=1600"
   },
   {
     id: "utilities",
     tag: "Unit 70",
     nameEn: "Steam Generation & Boiler Systems",
     nameFr: "Génération de Vapeur & Chaudières",
-    status: "Normal",
-    image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=600"
+    image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=1600"
   }
 ] as const;
 
 export default function Dashboard() {
   const { t, lang } = useI18n();
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  // Automatically cycle through background graphics every 5 seconds
+  useEffect(() => {
+    const sequence = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % heroSlides.length);
+    }, 5000);
+    return () => clearInterval(sequence);
+  }, []);
 
   return (
     <div className="industrial-grid">
-      {/* Hero */}
-      <section className="relative overflow-hidden border-b border-border">
-        <div className="absolute inset-0 bg-gradient-industrial opacity-95" />
-        <div className="absolute top-0 left-0 right-0 h-1 stripe-warning" />
-        <div className="relative px-4 md:px-10 py-10 md:py-16 max-w-7xl mx-auto">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-2 w-2 rounded-full bg-accent animate-pulse-accent" />
-            <span className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-white/70 font-mono">
-              {META.process} · {META.trains} {t("trains")}
-            </span>
+      {/* Hero Container with Sliding Backdrops */}
+      <section className="relative overflow-hidden border-b border-border min-h-[380px] flex items-center">
+        
+        {/* Layer 1: Sliding Backdrops */}
+        <div className="absolute inset-0 z-0">
+          {heroSlides.map((slide, idx) => (
+            <div
+              key={idx}
+              className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
+              style={{ 
+                backgroundImage: `url(${slide.image})`,
+                opacity: idx === slideIndex ? 0.22 : 0 
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Layer 2: Theme / Industrial Color Mask & Safety Striping */}
+        <div className="absolute inset-0 bg-gradient-industrial opacity-95 z-10" />
+        <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
+
+        {/* Layer 3: Interactive Text Details */}
+        <div className="relative px-4 md:px-10 py-12 md:py-16 max-w-7xl mx-auto z-20 w-full">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-2 w-2 rounded-full bg-accent animate-pulse-accent" />
+                <span className="text-[10px] md:text-xs uppercase tracking-[0.2em] text-white/70 font-mono">
+                  {META.process} · {META.trains} {t("trains")}
+                </span>
+              </div>
+              <h1 className="text-4xl md:text-6xl font-display font-bold text-white leading-[0.95] tracking-tight">
+                GNL1Z<span className="text-accent">.</span>
+              </h1>
+              <p className="mt-3 text-base md:text-xl text-white/80 max-w-2xl font-light">
+                {lang === "en"
+                  ? "Industrial Asset Management for the Sonatrach Arzew/Bethioua liquefaction complex."
+                  : "Gestion d'actifs industriels pour le complexe de liquéfaction Sonatrach Arzew/Bethioua."}
+              </p>
+            </div>
+
+            {/* Subtle live indicator pinpointing the current backdrop sector */}
+            <div className="hidden lg:block border border-white/10 bg-black/20 backdrop-blur-md rounded px-3 py-2 text-right max-w-xs self-end">
+              <span className="text-[9px] font-mono text-accent uppercase tracking-widest block mb-0.5">
+                ✦ Background Monitored Sector
+              </span>
+              <span className="text-xs font-bold text-white/90 line-clamp-1">
+                {heroSlides[slideIndex].tag} — {lang === "en" ? heroSlides[slideIndex].nameEn : heroSlides[slideIndex].nameFr}
+              </span>
+            </div>
           </div>
-          <h1 className="text-4xl md:text-6xl font-display font-bold text-white leading-[0.95] tracking-tight">
-            GNL1Z<span className="text-accent">.</span>
-          </h1>
-          <p className="mt-3 text-base md:text-xl text-white/80 max-w-2xl font-light">
-            {lang === "en"
-              ? "Industrial Asset Management for the Sonatrach Arzew/Bethioua liquefaction complex."
-              : "Gestion d'actifs industriels pour le complexe de liquéfaction Sonatrach Arzew/Bethioua."}
-          </p>
 
           <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <Stat icon={Factory} label={t("trains")} value={META.trains} />
@@ -94,54 +130,12 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <div className="pt-8"><TestScheduleWidget /></div>
+      {/* Scheduler Module Widget */}
+      <div className="pt-8">
+        <TestScheduleWidget />
+      </div>
 
-      {/* ─── NEW: Plant Sectors Section ─── */}
-      <section className="px-4 md:px-10 pt-10 max-w-7xl mx-auto">
-        <div className="mb-6">
-          <div className="text-[10px] uppercase tracking-widest text-accent font-mono mb-1">
-            / {lang === "en" ? "Process Areas" : "Zones de Procédé"}
-          </div>
-          <h2 className="text-2xl md:text-3xl font-display font-bold">
-            {lang === "en" ? "Facility Sector Matrix" : "Matrice des Secteurs de l'Usine"}
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {plantSectors.map((sector) => (
-            <div 
-              key={sector.id} 
-              className="group relative overflow-hidden rounded-lg border border-border bg-card/40 backdrop-blur-sm transition-all hover:border-accent/30"
-            >
-              <div className="h-28 w-full overflow-hidden relative border-b border-border">
-                <img 
-                  src={sector.image} 
-                  alt={lang === "en" ? sector.nameEn : sector.nameFr} 
-                  className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500"
-                />
-                <span className="absolute top-2 left-2 text-[9px] font-mono uppercase bg-background/90 text-accent px-1.5 py-0.5 rounded border border-border">
-                  {sector.tag}
-                </span>
-              </div>
-              <div className="p-3.5">
-                <h4 className="text-xs font-bold font-display line-clamp-1 tracking-tight text-foreground/95">
-                  {lang === "en" ? sector.nameEn : sector.nameFr}
-                </h4>
-                <div className="flex items-center gap-1.5 mt-2">
-                  <span className={`h-1.5 w-1.5 rounded-full ${
-                    sector.status === 'Normal' ? 'bg-emerald-500' : sector.status === 'Standby' ? 'bg-amber-500' : 'bg-cyan-500'
-                  }`} />
-                  <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">
-                    {sector.status}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Modules */}
+      {/* Main Navigation Modules Grid */}
       <section className="px-4 md:px-10 py-10 max-w-7xl mx-auto">
         <div className="flex items-end justify-between mb-6">
           <div>
@@ -195,4 +189,4 @@ function Stat({ icon: Icon, label, value, mono }: { icon: LucideIcon; label: str
       <div className={`text-xl md:text-2xl font-bold text-white ${mono ? "font-mono" : "font-display"}`}>{value}</div>
     </div>
   );
-}
+      }
