@@ -1,120 +1,196 @@
-import type { ReactNode } from "react";
+// src/pages/About.tsx
+import { useEffect, useState } from "react";
+import { 
+  Factory, MapPin, ShieldCheck, Layers, Flame, 
+  Gauge, Anchor, Award, LucideIcon 
+} from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
-import { META, EQUIPMENT, SECTIONS } from "@/data";
 import { GNL1Z_ASSETS } from "@/utils/assets";
-import { Factory, MapPin, Layers, Activity, Calendar, Gauge, Droplets, Wind, Image as ImageIcon } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import sonatrachLogo from "@/assets/sonatrach-logo.png";
+
+/* ─── ABOUT PAGE BACKGROUND SLIDES ─── */
+const aboutSlides = [
+  { tag: "Complex Overview", image: GNL1Z_ASSETS.units.unit40 },
+  { tag: "Liquefaction Train", image: GNL1Z_ASSETS.units.unit30 },
+  { tag: "Cryogenic Storage", image: GNL1Z_ASSETS.units.unit50 }
+] as const;
 
 export default function About() {
-  const { t, lang } = useI18n();
+  const { lang } = useI18n();
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  useEffect(() => {
+    const sequence = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % aboutSlides.length);
+    }, 6000);
+    return () => clearInterval(sequence);
+  }, []);
 
   return (
-    <div className="px-4 md:px-10 py-8 md:py-12 max-w-5xl mx-auto">
-      <div className="text-[10px] uppercase tracking-widest text-accent font-mono mb-2">/ {t("about")}</div>
-
-      <div className="flex items-start gap-5 mb-6 flex-wrap">
-        <div className="bg-white rounded-lg p-3 shadow-card border border-border">
-          <img src={sonatrachLogo} alt="Sonatrach" className="h-20 w-auto" />
-        </div>
-        <div className="flex-1 min-w-[260px]">
-          <h1 className="text-4xl md:text-5xl font-display font-bold tracking-tight mb-2">{META.project}</h1>
-          <p className="text-base text-muted-foreground font-mono">SONATRACH · GL1Z Bethioua · Arzew, Algeria</p>
-        </div>
-      </div>
-
-      <p className="text-lg md:text-xl text-foreground/80 font-light leading-relaxed mb-10 border-l-4 border-accent pl-5">
-        {lang === "en"
-          ? "GNL1Z is a flagship LNG liquefaction complex of Sonatrach, located in Bethioua (Arzew industrial zone), Algeria. The plant employs the Air Products AP-C3MR™ propane-precooled mixed-refrigerant process across six parallel trains, producing liquefied natural gas, liquefied petroleum gas (propane / butane), and natural gasoline."
-          : "GNL1Z est un complexe de liquéfaction GNL phare de Sonatrach, situé à Bethioua (zone industrielle d'Arzew), Algérie. L'usine utilise le procédé Air Products AP-C3MR™ à pré-refroidissement propane et réfrigérant mixte sur six trains parallèles, produisant GNL, GPL (propane / butane) et essence naturelle."}
-      </p>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-12">
-        <Stat icon={MapPin} label={lang === "en" ? "Location" : "Emplacement"} value={META.location} />
-        <Stat icon={Factory} label={t("process")} value={META.process} />
-        <Stat icon={Layers} label={t("trains")} value={`${META.trains} × parallel`} />
-        <Stat icon={Activity} label={t("equipCount")} value={EQUIPMENT.length} />
-        <Stat icon={Calendar} label={lang === "en" ? "Commissioned" : "Mise en service"} value="1978" />
-        <Stat icon={Gauge} label={lang === "en" ? "Capacity" : "Capacité"} value="~ 17.6 MTPA" />
-        <Stat icon={Droplets} label={lang === "en" ? "LPG" : "GPL"} value="Propane / Butane" />
-        <Stat icon={Wind} label={lang === "en" ? "Refrigerant" : "Réfrigérant"} value="C3 + MCR" />
-      </div>
-
-      <Section title={t("exec_summary")}>
-        {lang === "en"
-          ? "GNL1Z is one of the cornerstone LNG production assets of Sonatrach. The facility integrates feed gas decarbonation (MEA), molecular-sieve dehydration, mercury removal, cryogenic liquefaction, and fractionation of heavier hydrocarbons in a tightly coupled process. This asset management workspace consolidates the equipment master file, spare parts inventory (713 references), DCS instrument mapping, and the operational manual library into one searchable, bilingual interface."
-          : "GNL1Z est l'un des actifs de production GNL stratégiques de Sonatrach. L'installation intègre la décarbonatation du gaz d'alimentation (MEA), la déshydratation par tamis moléculaires, l'élimination du mercure, la liquéfaction cryogénique et le fractionnement des hydrocarbures lourds dans un procédé étroitement couplé. Cet espace de gestion d'actifs consolide le fichier maître des équipements, l'inventaire des pièces de rechange (713 références), le mapping des instruments DCS et la bibliothèque des manuels opérationnels en une interface unique, recherchable et bilingue."}
-      </Section>
-
-      <Section title={lang === "en" ? "Process flow" : "Schéma du procédé"}>
-        {lang === "en"
-          ? "Feed natural gas from Hassi R'Mel arrives at the inlet scrubber, then passes through MEA decarbonation (X01) to remove CO₂ down to LNG-grade specification. Dehydration (X02) on molecular sieves drops moisture below 1 ppmv. The dry gas is cooled in propane chillers (X05) before entering the main cryogenic exchanger (MCR loop, X04 / X06) where it liquefies at approximately −162 °C. Heavier components are recovered and routed to the demethaniser, deethaniser, depropaniser and debutaniser columns (X07–X10) for LPG and natural gasoline production."
-          : "Le gaz naturel d'alimentation provenant de Hassi R'Mel arrives au scrubber d'entrée puis passe par la décarbonatation MEA (X01) pour éliminer le CO₂ aux spécifications GNL. La déshydratation (X02) sur tamis moléculaires abaisse l'humidité sous 1 ppmv. Le gaz sec est refroidi dans les chillers propane (X05) avant d'entrer dans l'échangeur cryogénique principal (boucle MCR, X04 / X06) où it se liquéfie à environ −162 °C. Les composants plus lourds sont récupérés et envoyés vers les colonnes déméthaniseur, déethaniseur, dépropaniseur et débutaniseur (X07–X10) pour la production de GPL et essence naturelle."}
-      </Section>
-
-      <Section title={lang === "en" ? "Process sections covered" : "Sections procédé couvertes"}>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {SECTIONS.map((s) => (
-            <span key={s} className="px-3 py-1.5 rounded border border-border bg-secondary/60 text-sm font-mono">{s}</span>
+    <div className="industrial-grid min-h-screen bg-background pb-16 space-y-12">
+      
+      {/* ─── HERO BANNER: WIDESCREEN IMMERSIVE CAROUSEL ─── */}
+      <section className="relative overflow-hidden border-b border-border min-h-[460px] flex items-center bg-zinc-950 isolation-isolate w-full">
+        
+        {/* Layer 1: High-Definition Background Photos */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          {aboutSlides.map((slide, idx) => (
+            <img
+              key={idx}
+              src={slide.image}
+              alt={slide.tag}
+              className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-1000 ease-in-out
+                ${idx === slideIndex ? "opacity-80 scale-100" : "opacity-0 scale-105"}`}
+            />
           ))}
         </div>
-      </Section>
 
-      {/* ─── NEW FACILITY GALLERY SECTION ─── */}
-      <Section title={lang === "en" ? "Facility & Equipment Views" : "Vues de l'installation et des équipements"}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
-          {GNL1Z_ASSETS.about.map((imgSrc, idx) => (
-            <div 
-              key={idx} 
-              className="group relative border border-border rounded-lg overflow-hidden bg-card aspect-video shadow-sm hover:border-accent/30 transition-colors"
-            >
-              <img
-                src={imgSrc}
-                alt={`GNL1Z Technical Asset View ${idx + 1}`}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end p-2">
-                <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  <ImageIcon className="h-3 w-3 text-accent" />
-                  <span>Asset View {idx + 1}</span>
-                </div>
-              </div>
+        {/* Layer 2: Left-To-Right Precision Masking Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-60 z-10 pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
+
+        {/* Layer 3: Typography Header */}
+        <div className="relative px-4 md:px-10 py-16 max-w-7xl mx-auto z-20 w-full">
+          <div className="max-w-3xl space-y-4">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-orange-500 font-mono font-bold">
+              {lang === "en" ? "/ COMPLEX OVERVIEW & SPECS" : "/ APPERÇU DU COMPLEXE & SPECS"}
             </div>
-          ))}
+            <h1 className="text-4xl md:text-6xl font-display font-extrabold text-white tracking-tight leading-none">
+              About GNL1Z
+              <span className="h-3 w-3 rounded-full bg-orange-500 inline-block ml-1.5 translate-y-[-4px]" />
+            </h1>
+            <p className="text-base md:text-xl text-zinc-200 font-light leading-relaxed drop-shadow-md">
+              {lang === "en"
+                ? "The GL1Z liquefaction complex stands as a cornerstone of Sonatrach's downstream hydrocarbon processing infrastructure, employing the proven Air Products C3MR™ process cycle."
+                : "Le complexe de liquéfaction GL1Z constitue un pilier de l'infrastructure de traitement aval de Sonatrach, utilisant le cycle de procédé éprouvé Air Products C3MR™."}
+            </p>
+          </div>
         </div>
-      </Section>
+      </section>
 
-      <Section title={lang === "en" ? "About this workspace" : "À propos de cet espace"}>
-        {lang === "en"
-          ? "Built as a personal asset-management cockpit for the GNL1Z plant: a single bilingual interface bringing together the equipment master, spare-parts catalogue, DCS screen library with AI-assisted instrument detection, and the operational manuals — designed to speed up daily reliability and maintenance work in the field."
-          : "Conçu comme un cockpit personnel de gestion d'actifs pour l'usine GNL1Z : une interface bilingue unique réunissant le maître équipements, le catalogue PDR, la bibliothèque d'écrans DCS avec détection d'instruments assistée par IA, et les manuels opérationnels — pour accélérer le travail quotidien de fiabilité et de maintenance sur le terrain."}
-      </Section>
+      {/* ─── TECHNICAL SPECIFICATIONS GRID ─── */}
+      <section className="px-4 md:px-10 max-w-7xl mx-auto space-y-6">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-orange-500 font-mono mb-1">/ Parameters</div>
+          <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground">Technical Architecture</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <TechCard 
+            icon={Layers} 
+            title={lang === "en" ? "Process Cycle" : "Cycle de Procédé"}
+            value="AP-C3MR™" 
+            sub={lang === "en" ? "Propane Pre-cooled Mixed Refrigerant" : "Refrigérant Mixte Pré-refroidi au Propane"}
+          />
+          <TechCard 
+            icon={Gauge} 
+            title={lang === "en" ? "Design Capacity" : "Capacité Nominale"} 
+            value="10.5 MTA" 
+            sub={lang === "en" ? "Million Tons per Annum Liquefied Gas" : "Millions de Tonnes par An de Gaz Liquéfié"}
+          />
+          <TechCard 
+            icon={Flame} 
+            title={lang === "en" ? "Cryogenic Storage" : "Stockage Cryogénique"} 
+            value="300,000 m³" 
+            sub={lang === "en" ? "Total containment structural tanks" : "Réservoirs à intégrité totale"}
+          />
+          <TechCard 
+            icon={Anchor} 
+            title={lang === "en" ? "Marine Terminal" : "Terminal Maritime"} 
+            value="2 Loading Berths" 
+            sub={lang === "en" ? "High-rate simultaneous LNG exporting" : "Exportation simultanée à haut débit"}
+          />
+        </div>
+      </section>
+
+      {/* ─── DETAILED INFORMATION PROFILE ─── */}
+      <section className="px-4 md:px-10 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
+        
+        {/* Geographic Context */}
+        <div className="bg-card border border-border rounded-xl p-6 flex flex-col justify-between hover:border-sky-500/30 transition-all duration-200">
+          <div className="space-y-4">
+            <div className="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 w-fit border border-sky-500/20">
+              <MapPin className="h-5 w-5" />
+            </div>
+            <h3 className="text-xl font-display font-bold tracking-tight">
+              {lang === "en" ? "Geographic Location" : "Emplacement Géographique"}
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {lang === "en"
+                ? "Situated within the industrial zone of Arzew/Bethioua, Algeria. The facility benefits from prime Mediterranean coastal placement, enabling streamlined pipeline delivery routes from Hassi R'Mel gas fields and optimal maritime export access."
+                : "Situé dans la zone industrielle d'Arzew/Bethioua, Algérie. L'usine bénéficie d'un emplacement côtier privilégié, facilitant l'acheminement par gazoduc depuis Hassi R'Mel et l'exportation maritime."}
+            </p>
+          </div>
+          <div className="mt-6 pt-4 border-t border-border/40 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+            Coordinates: 35.8122° N, 0.2851° W
+          </div>
+        </div>
+
+        {/* Operational Focus */}
+        <div className="bg-card border border-border rounded-xl p-6 flex flex-col justify-between hover:border-amber-500/30 transition-all duration-200">
+          <div className="space-y-4">
+            <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 w-fit border border-amber-500/20">
+              <Factory className="h-5 w-5" />
+            </div>
+            <h3 className="text-xl font-display font-bold tracking-tight">
+              {lang === "en" ? "Industrial Infrastructure" : "Infrastructures Industrielles"}
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {lang === "en"
+                ? "The plant features advanced feed gas treatment units, heavy hydrocarbon extraction units, and high-horsepower refrigeration compressor strings. This hub acts as the main software analytics platform tracking rotating asset health and thermodynamic loop efficiencies."
+                : "L'usine comprend des unités avancées de traitement du gaz d'alimentation, d'extraction des hydrocarbures lourds, et des trains de compresseurs de réfrigération. Ce hub sert de plateforme d'analyse principale."}
+            </p>
+          </div>
+          <div className="mt-6 pt-4 border-t border-border/40 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+            Configuration: 6 Processing Trains
+          </div>
+        </div>
+
+        {/* Asset Integrity Standards */}
+        <div className="bg-card border border-border rounded-xl p-6 flex flex-col justify-between hover:border-emerald-500/30 transition-all duration-200">
+          <div className="space-y-4">
+            <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 w-fit border border-emerald-500/20">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <h3 className="text-xl font-display font-bold tracking-tight">
+              {lang === "en" ? "Asset Integrity & HSE" : "Intégrité des Actifs & HSE"}
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {lang === "en"
+                ? "Operating under international hydrocarbon processing metrics and safety criteria. Continuous dynamic scheduling ensures rigorous mechanical integrity inspections, structural stress monitoring, and structural preventive scheduling for cryogenic heat exchangers."
+                : "Opérant selon des critères internationaux de traitement des hydrocarbures et de sécurité. Une planification dynamique continue assure des inspections rigoureuses de l'intégrité mécanique."}
+            </p>
+          </div>
+          <div className="mt-6 pt-4 border-t border-border/40 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+            Compliance: ISO 9001 / OSHA Standards
+          </div>
+        </div>
+
+      </section>
     </div>
   );
 }
 
-function Stat({ icon: Icon, label, value }: {
+interface TechCardProps {
   icon: LucideIcon;
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="border border-border rounded-lg bg-card p-4 hover:border-accent/30 transition-colors">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="h-4 w-4 text-accent" />
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{label}</span>
-      </div>
-      <div className="font-mono font-semibold text-sm break-words">{value}</div>
-    </div>
-  );
+  title: string;
+  value: string;
+  sub: string;
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function TechCard({ icon: Icon, title, value, sub }: TechCardProps) {
   return (
-    <div className="mb-8">
-      <h2 className="text-xl font-display font-bold mb-3 border-l-4 border-accent pl-4">{title}</h2>
-      <div className="text-sm text-muted-foreground leading-relaxed">{children}</div>
+    <div className="bg-zinc-900/40 border border-border/60 rounded-xl p-5 hover:border-orange-500/20 transition-colors duration-200">
+      <div className="flex items-center gap-2 text-zinc-400 text-[10px] uppercase tracking-widest font-mono mb-3">
+        <Icon className="h-3.5 w-3.5 text-orange-500" />
+        {title}
+      </div>
+      <div className="text-2xl md:text-3xl font-display font-extrabold text-white tracking-tight">
+        {value}
+      </div>
+      <p className="text-xs text-muted-foreground mt-2 font-normal leading-normal">
+        {sub}
+      </p>
     </div>
   );
 }
