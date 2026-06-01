@@ -2,10 +2,9 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "@/contexts/I18nContext";
 import { getCoordinate } from "@/utils/processFlowCoordinates";
-import { getEquipmentByTag } from "@/data";
 import {
   ZoomIn, ZoomOut, RotateCcw, X, Search,
-  Layers, ExternalLink, BookOpen, Cpu, ChevronDown, Menu,
+  Layers, ExternalLink, BookOpen, Menu,
 } from "lucide-react";
 
 /* ─── DEBUG MODE TOGGLE ─────────────────────────────────────────────────── */
@@ -100,15 +99,213 @@ interface TagDef {
   descEn: string; specs: Record<string, string>;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   FULL EQUIPMENT LIST (25 tags)
+   ══════════════════════════════════════════════════════════════════════════ */
 const TAGS: TagDef[] = [
+  /* ── FEED TREATMENT ──────────────────────────────── */
   {
     id:"F502", diag:"101-F502", x:4.5, y:21.2,
     nameEn:"MEA Absorber",          nameFr:"Absorbeur MEA",
     section:"treatment", dbTag:"X01-F-502",
-    dcsPanels:["decarbonation-01","decarbonation-02","scrubber","general-train"],
+    dcsPanels:["decarbonation-01","decarbonation-2","scrubber","general-train"],
     manuals:["S01"],
-    descEn:"High-pressure MEA absorber ...",
+    descEn:"High-pressure MEA absorber — 55.8 m × 5.5 m. Removes CO₂ from feed gas to <50 ppmv (LNG grade). 81 bar, HIC carbon steel.",
     specs:{ Pressure:"81 bar", Mass:"147 050 kg", Volume:"173 m³", Serial:"35960-6", Status:"DEROGATION" },
+  },
+  {
+    id:"F501", diag:"101-F501", x:11.3, y:32.3,
+    nameEn:"MEA Regenerator",       nameFr:"Régénérateur MEA",
+    section:"treatment", dbTag:"X01-F-501",
+    dcsPanels:["decarbonation-01","decarbonation-2"],
+    manuals:["S01"],
+    descEn:"MEA regenerator (stripper) — 21 valve trays. Steam-heated kettle reboiler X01-E-502 strips CO₂ from rich amine at 8.4 bar / 121 °C.",
+    specs:{ Pressure:"8.4 bar", Mass:"22 950 kg", Volume:"27 m³", Serial:"35959-6", Status:"DEROGATION" },
+  },
+  {
+    id:"G507", diag:"101-G-507", x:5.5, y:55.9,
+    nameEn:"MEA Flash Drum",        nameFr:"Ballon Flash MEA",
+    section:"treatment", dbTag:"X01-G-507",
+    dcsPanels:["decarbonation-01"],
+    manuals:["S01"],
+    descEn:"Horizontal flash drum — rich amine pressure let-down before regenerator. Recovers dissolved hydrocarbons from rich MEA.",
+    specs:{ Pressure:"7.8 bar", Mass:"300 kg", Serial:"V-2089-F", Status:"PREVENTIVE" },
+  },
+  /* ── DEHYDRATION ─────────────────────────────────── */
+  {
+    id:"R0311", diag:"102-R03.11", x:16.8, y:15.3,
+    nameEn:"Mol-Sieve Bed A",       nameFr:"Lit Tamis Mol. A",
+    section:"dehydration", dbTag:"X02-R-03.12",
+    dcsPanels:["dehydration-1","dehydration-2","dehydration-3"],
+    manuals:["S02"],
+    descEn:"Molecular sieve adsorption bed A (4A zeolite). Dries feed gas to <1 ppmv H₂O. Timed 8 h adsorption / 8 h regeneration cycle at 280 °C.",
+    specs:{ Mass:"8 000 kg", Status:"PREVENTIVE" },
+  },
+  {
+    id:"R0310", diag:"102-R03.10", x:21.7, y:16.8,
+    nameEn:"Mol-Sieve Bed B",       nameFr:"Lit Tamis Mol. B",
+    section:"dehydration", dbTag:"X02-R-03.12",
+    dcsPanels:["dehydration-2","dehydration-3"],
+    manuals:["S02"],
+    descEn:"Molecular sieve bed B — on regeneration cycle while Bed A adsorbs. Hot regeneration gas at ~280 °C desorbs water.",
+    specs:{ Mass:"8 000 kg", Status:"PREVENTIVE" },
+  },
+  {
+    id:"R0312", diag:"102-R03.12", x:24.8, y:25.9,
+    nameEn:"Mercury Guard Bed",     nameFr:"Lit de Démercurisation",
+    section:"dehydration", dbTag:"X02-R-03.12",
+    dcsPanels:["dehydration-3"],
+    manuals:["S02"],
+    descEn:"Sulphur-impregnated activated-carbon guard bed. Reduces mercury to <0.01 µg/Nm³ before cryogenic processing — protects aluminium MCHE.",
+    specs:{ Status:"PREVENTIVE" },
+  },
+  /* ── PROPANE / SCRUBBING ─────────────────────────── */
+  {
+    id:"E0540", diag:"104-E05.40", x:41.1, y:22.2,
+    nameEn:"MCR / Feed Pre-Chiller", nameFr:"Pré-refroidisseur MCR/Alim.",
+    section:"propane", dbTag:"X04-E-05.40",
+    dcsPanels:["propane-1","propane-2","scrubber"],
+    manuals:["S03","S04"],
+    descEn:"Shell & tube pre-chiller. Cools feed gas and MCR stream with propane refrigerant before scrub column and MCHE entry.",
+    specs:{ Status:"DEROGATION" },
+  },
+  {
+    id:"F0711", diag:"104-F07.11", x:33.5, y:36.6,
+    nameEn:"Scrub Column",          nameFr:"Colonne de Lavage",
+    section:"propane", dbTag:"X04-F-07.11",
+    dcsPanels:["scrubber","propane-1","echangeur-recup-gpl"],
+    manuals:["S04"],
+    descEn:"Scrub column — removes C₅+ heavy hydrocarbons from feed before the MCHE. Prevents freeze-out in the main cryogenic exchanger at −162 °C.",
+    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"G0785", diag:"104-G07.85", x:40.2, y:59.3,
+    nameEn:"Propane HP Accumulator", nameFr:"Accumulateur Propane HP",
+    section:"propane", dbTag:"X04-G-07.85",
+    dcsPanels:["propane-1","propane-2"],
+    manuals:["S03"],
+    descEn:"HP propane accumulator — receives condensed liquid propane from CW condenser before HP expansion valve and MP chillers.",
+    specs:{ Mass:"400 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"G0790", diag:"104-G07.90", x:46.9, y:59.3,
+    nameEn:"Propane MP Flash Drum", nameFr:"Ballon Flash Propane MP",
+    section:"propane", dbTag:"X04-G-07.90",
+    dcsPanels:["propane-2","propane-3"],
+    manuals:["S03"],
+    descEn:"Medium-pressure propane flash drum — LP/MP separation stage. Flash gas returns to MP compressor suction; liquid feeds MP-level chillers.",
+    specs:{ Mass:"400 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"G0791", diag:"104-G07.91", x:51.8, y:66.7,
+    nameEn:"Propane LP Suction Drum", nameFr:"Ballon Aspiration BP Propane",
+    section:"propane", dbTag:"X04-G-07.91",
+    dcsPanels:["propane-3"],
+    manuals:["S03"],
+    descEn:"LP propane suction drum — protects LP compressor stage from liquid carry-over at the coldest propane level (~−35 °C).",
+    specs:{ Mass:"400 kg", Status:"DEROGATION" },
+  },
+  /* ── LIQUEFACTION / MCR ──────────────────────────── */
+  {
+    id:"E0520", diag:"106-E05.20", x:50.6, y:17.3,
+    nameEn:"Main Cryogenic Exch.",  nameFr:"Échangeur Cryogénique Princ.",
+    section:"liquefaction", dbTag:"X06-E-05.30",
+    dcsPanels:["liquefaction-1","liquefaction-2","mcr-1","mcr-2","mcr-3","general-train"],
+    manuals:["S05","S06"],
+    descEn:"MCHE — coil-wound cryogenic heat exchanger. Liquefies feed gas to −162 °C using mixed refrigerant (N₂/CH₄/C₂H₆/C₃H₈/C₄H₁₀). Core of the AP-C3MR™ process.",
+    specs:{ Status:"DEROGATION" },
+  },
+  {
+    id:"G0783", diag:"106-G07.83", x:65.7, y:15.2,
+    nameEn:"MCR HP Separator",      nameFr:"Séparateur MCR HP",
+    section:"liquefaction", dbTag:"X06-G-07.83",
+    dcsPanels:["mcr-1","mcr-2","liquefaction-1"],
+    manuals:["S05"],
+    descEn:"HP MCR separator — splits mixed refrigerant into light vapour (N₂/CH₄/C₂H₆) fed to MCHE warm bundle and heavy liquid (C₃/C₄) fed separately.",
+    specs:{ Mass:"400 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"G0788", diag:"105-G07.88", x:77.8, y:43.1,
+    nameEn:"MCR LP Suction Drum",   nameFr:"Ballon Aspiration MCR BP",
+    section:"liquefaction", dbTag:"X05-G-07.88",
+    dcsPanels:["mcr-1","mcr-2"],
+    manuals:["S05"],
+    descEn:"MCR LP suction drum — separates mixed-refrigerant vapour returning from MCHE warm end before LP compressor stage.",
+    specs:{ Mass:"400 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"G0789", diag:"K05-G07.89", x:87.2, y:49.0,
+    nameEn:"MCR HP Suction Drum",   nameFr:"Ballon Aspiration MCR HP",
+    section:"liquefaction", dbTag:"X05-G-07.89",
+    dcsPanels:["mcr-3"],
+    manuals:["S05"],
+    descEn:"MCR HP suction drum — final liquid/vapour separation before HP compressor stage. Ensures dry gas enters HP impellers.",
+    specs:{ Mass:"400 kg", Status:"DEROGATION" },
+  },
+  /* ── COMPRESSORS ─────────────────────────────────── */
+  {
+    id:"K110", diag:"103-K01.10", x:59.5, y:46.7,
+    nameEn:"Propane Compressor",    nameFr:"Compresseur Propane",
+    section:"compressor", dbTag:null,
+    dcsPanels:["propane-1","propane-2","propane-3"],
+    manuals:["S03"],
+    descEn:"4-stage centrifugal propane compressor driven by condensing steam turbine. Circulates propane refrigerant through HP/MP/LP chilling levels.",
+    specs:{},
+  },
+  {
+    id:"G0786", diag:"103-G07.86", x:78.7, y:55.0,
+    nameEn:"Propane LP Drum",       nameFr:"Ballon Propane BP",
+    section:"propane", dbTag:"X03-G-07.86",
+    dcsPanels:["propane-3"],
+    manuals:["S03"],
+    descEn:"Propane LP suction drum — lowest-pressure level of the propane refrigeration loop, feeds LP stage of compressor K01.10.",
+    specs:{ Mass:"400 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"K120", diag:"105-K01.20", x:77.6, y:31.9,
+    nameEn:"MCR Compressor LP/MP",  nameFr:"Compresseur MCR BP/MP",
+    section:"compressor", dbTag:null,
+    dcsPanels:["mcr-1","mcr-2","mcr-3"],
+    manuals:["S05"],
+    descEn:"MCR centrifugal compressor LP/MP bodies driven by steam turbine — first two compression stages of the mixed-refrigerant loop, with intercooling.",
+    specs:{},
+  },
+  {
+    id:"K121", diag:"105-K01.21", x:87.2, y:29.2,
+    nameEn:"MCR Compressor HP",     nameFr:"Compresseur MCR HP",
+    section:"compressor", dbTag:null,
+    dcsPanels:["mcr-3"],
+    manuals:["S05"],
+    descEn:"MCR HP compressor body — final stage, discharges at ~44 bar. HP MCR passes through propane aftercooler before HP separator.",
+    specs:{},
+  },
+  /* ── FRACTIONATION ───────────────────────────────── */
+  {
+    id:"F0721", diag:"107-F07.21", x:10.2, y:69.4,
+    nameEn:"Demethaniser",          nameFr:"Déméthaniseur",
+    section:"fractionation", dbTag:"X07-F-07.21",
+    dcsPanels:["demethanisation","demethanisation-2","general-train"],
+    manuals:["S07"],
+    descEn:"Demethaniser — separates methane (LNG product) from C₂+ NGL. Overhead CH₄ recycles to liquefaction; bottoms feeds de-ethaniser.",
+    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"F0731", diag:"108-F07.31", x:19.8, y:69.4,
+    nameEn:"De-ethaniser",          nameFr:"Dééthaniseur",
+    section:"fractionation", dbTag:"X08-F-07.31",
+    dcsPanels:["deethanisation"],
+    manuals:["S08"],
+    descEn:"De-ethaniser — separates ethane (C₂) from propane/butane/gasoline. Ethane overhead is exported or re-injected; bottoms feeds depropaniser.",
+    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
+  },
+  {
+    id:"F0741", diag:"109-F07.41", x:34.8, y:69.4,
+    nameEn:"Depropaniser",          nameFr:"Dépropaniseur",
+    section:"fractionation", dbTag:"X09-F-07.41",
+    dcsPanels:["depropanisation"],
+    manuals:["S09"],
+    descEn:"Depropaniser — separates propane (LPG) from butanes and natural gasoline. Propane overhead condensed and pumped to LPG storage.",
+    specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
   },
   {
     id:"F0751", diag:"110-F07.51", x:47.4, y:69.4,
@@ -116,11 +313,14 @@ const TAGS: TagDef[] = [
     section:"fractionation", dbTag:"X10-F-07.51",
     dcsPanels:["debutanisation"],
     manuals:["S10"],
-    descEn:"Debutaniser ...",
+    descEn:"Debutaniser — separates butane (C₄) from natural gasoline (C₅+). Butane overhead → LPG blending; gasoline bottoms → export.",
     specs:{ Mass:"15 000 kg", Status:"DEROGATION" },
   },
 ];
 
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+   ══════════════════════════════════════════════════════════════════════════ */
 export default function SmartProcessFlow() {
   const { lang } = useI18n();
   const L = (en: string, fr: string) => lang === "fr" ? fr : en;
@@ -217,25 +417,19 @@ export default function SmartProcessFlow() {
     if (!dragStart.current) return;
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
-    
-    // FIX: Wider macro-slippage safe-zone on mobile viewports to prevent swallowing taps
     const threshold = isMobile ? 12 : 4;
     if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
       setIsDragging(true);
     }
-    
     setOffset(clampOffset({
       x: dragStart.current.ox + dx,
       y: dragStart.current.oy + dy,
     }));
   };
   
-  const onPointerUp = () => { 
-    dragStart.current = null; 
-    // Defer flag reset out of active run-loop so canvas click triggers properly
-    setTimeout(() => {
-      setIsDragging(false);
-    }, 0);
+  const onPointerUp = () => {
+    dragStart.current = null;
+    setTimeout(() => setIsDragging(false), 0);
   };
 
   /* ── Keyboard shortcuts ── */
@@ -266,7 +460,7 @@ export default function SmartProcessFlow() {
     });
   }, [filter, search]);
 
-  /* ── Memoized coordinate map (performance) ── */
+  /* ── Memoized coordinate map ── */
   const coordMap = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>();
     TAGS.forEach(t => {
@@ -308,7 +502,7 @@ export default function SmartProcessFlow() {
         background: "rgba(3,11,18,0.98)", backdropFilter: "blur(8px)",
         zIndex: 30,
       }}>
-        {/* Hamburger button for dashboard */}
+        {/* Hamburger button */}
         <button
           onClick={() => setDashOpen(prev => !prev)}
           style={{
@@ -331,7 +525,6 @@ export default function SmartProcessFlow() {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-          {/* Brand Flag */}
           <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
             <Layers size={13} style={{ color:"#00c8ff" }} />
             {!isMobile && (
@@ -342,7 +535,6 @@ export default function SmartProcessFlow() {
             )}
           </div>
 
-          {/* Core Text Live-Search Input */}
           <div style={{ position: "relative", flex: isMobile ? "1" : "none", width: isMobile ? "auto" : "210px" }}>
             <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
             <input 
@@ -364,7 +556,6 @@ export default function SmartProcessFlow() {
           </div>
         </div>
 
-        {/* Section Loops Filter Rows */}
         <div style={{ display:"flex", gap:4, overflowX:"auto", flexShrink:1, alignItems: "center",
           scrollbarWidth:"none", msOverflowStyle:"none" }}>
           {(["all", ...Object.keys(SECT)] as (Section | "all")[]).map(s => {
@@ -389,7 +580,6 @@ export default function SmartProcessFlow() {
             );
           })}
 
-          {/* Scaling Utilities */}
           <div style={{ display:"flex", alignItems:"center", gap:4, marginLeft: isMobile ? 12 : "auto", flexShrink:0 }}>
             {[
               { icon:<ZoomIn size={11}/>,    fn:() => applyZoom(0.25) },
@@ -427,7 +617,6 @@ export default function SmartProcessFlow() {
           onPointerLeave={onPointerUp}
           onClick={() => { if (!isDragging) setSelected(null); }}
         >
-          {/* Dynamic Transform Matrix Wrapper */}
           <div style={{
             position:"absolute", inset:0,
             transform:`translate(${offset.x}px,${offset.y}px) scale(${scale})`,
@@ -493,7 +682,6 @@ export default function SmartProcessFlow() {
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => {
                         e.stopPropagation();
-                        // Direct bypass: pointer propagation blockage guarantees a true click event here
                         setSelected(isActive ? null : t);
                       }}
                       aria-label={t.diag + ' – ' + L(t.nameEn, t.nameFr)}
@@ -526,7 +714,7 @@ export default function SmartProcessFlow() {
           </div>
         </div>
 
-        {/* ── DESKTOP CONTROL DRAWERS PANELS ── */}
+        {/* ── DESKTOP EQUIPMENT PANEL ── */}
         {!isMobile && selected && sc && (
           <div style={{
             width: 380, borderLeft: "1px solid rgba(0,200,255,0.15)",
@@ -544,13 +732,12 @@ export default function SmartProcessFlow() {
               <button onClick={() => setSelected(null)} style={{ background:"transparent", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer" }}><X size={16}/></button>
             </div>
             <div style={{ flex:1, overflowY:"auto", padding:16 }}>
-              {/* @ts-ignore */}
               <PanelContent tag={selected} lang={lang} onPreviewDcs={(title, path) => setLightbox({ url: dcsUrl(path), title })} />
             </div>
           </div>
         )}
 
-        {/* ── MOBILE BOTTOM FLOATING SHEETS ── */}
+        {/* ── MOBILE BOTTOM SHEET ── */}
         {isMobile && selected && sc && (
           <div
             style={{
@@ -572,14 +759,13 @@ export default function SmartProcessFlow() {
               <button onClick={() => setSelected(null)} style={{ background:"transparent", border:"1px solid rgba(255,255,255,0.15)", borderRadius:4, color:"rgba(255,255,255,0.4)", width:26, height:26, display:"grid", placeItems:"center" }}><X size={12}/></button>
             </div>
             <div style={{ flex:1, overflowY:"auto", padding:"0 16px 20px" }}>
-              {/* @ts-ignore */}
               <PanelContent tag={selected} lang={lang} onPreviewDcs={(title, path) => setLightbox({ url: dcsUrl(path), title })} />
             </div>
           </div>
         )}
       </div>
 
-      {/* ═══ DASHBOARD DRAWER OVERLAY (DESKTOP & MOBILE SIDEBAR) ═══ */}
+      {/* ═══ DASHBOARD DRAWER ═══ */}
       {dashOpen && (
         <div
           style={{
@@ -606,7 +792,6 @@ export default function SmartProcessFlow() {
             </button>
           </div>
 
-          {/* Dashboard search */}
           <div style={{ padding: "6px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
             <div style={{ position: "relative" }}>
               <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
@@ -630,7 +815,6 @@ export default function SmartProcessFlow() {
             </div>
           </div>
 
-          {/* Dashboard list grouped by section */}
           <div style={{ flex: 1, overflowY: "auto", padding: 8, display: "flex", flexDirection: "column", gap: 12 }}>
             {(["treatment","dehydration","propane","liquefaction","fractionation","compressor"] as Section[]).map(section => {
               const tags = dashboardTags.filter(t => t.section === section);
@@ -684,24 +868,135 @@ export default function SmartProcessFlow() {
           </div>
         </div>
       )}
+
+      {/* ═══ LIGHTBOX FOR DCS SCREENSHOTS ═══ */}
+      {lightbox && (
+        <div 
+          onClick={() => setLightbox(null)}
+          style={{
+            position:"fixed", inset:0, background:"rgba(2,6,12,0.94)",
+            display:"grid", placeItems:"center", zIndex:200, padding:20, backdropFilter:"blur(6px)"
+          }}
+        >
+          <div style={{ position:"relative", maxWidth:"95vw", maxHeight:"90vh" }} onClick={e => e.stopPropagation()}>
+            <div style={{ position:"absolute", top:-32, left:0, right:0, display:"flex", justifyContent:"space-between", color:"#fff" }}>
+              <span style={{ fontFamily:"monospace", fontSize:12 }}>{lightbox.title}</span>
+              <button onClick={() => setLightbox(null)} style={{ background:"transparent", border:"none", color:"#fff", cursor:"pointer" }}><X size={16}/></button>
+            </div>
+            <img src={lightbox.url} alt="DCS Console Screen Preview" style={{ width:"100%", height:"100%", objectFit:"contain", border:"1px solid rgba(255,255,255,0.12)", borderRadius:4 }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ─── STUB COMPONENT TO PREVENT COMPILATION CRASHES ─── */
+/* ══════════════════════════════════════════════════════════════════════════
+   FULL DETAIL PANEL (PanelContent)
+   ══════════════════════════════════════════════════════════════════════════ */
 function PanelContent({ tag, lang, onPreviewDcs }: { tag: TagDef; lang: string; onPreviewDcs: (title: string, path: string) => void }) {
   const L = (en: string, fr: string) => lang === "fr" ? fr : en;
+  
+  const filteredDcs = useMemo(() => DCS.filter(d => tag.dcsPanels.includes(d.id)), [tag.dcsPanels]);
+  const filteredManuals = useMemo(() => MANUALS.filter(m => tag.manuals.includes(m.id)), [tag.manuals]);
+  const linkedInstruments = useMemo(() => {
+    return [...new Set(tag.dcsPanels.flatMap(pid => INSTR[pid] ?? []))].slice(0, 24);
+  }, [tag.dcsPanels]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, fontSize: 13, color: "rgba(255,255,255,0.8)" }}>
-      <p style={{ lineHeight: 1.5, color: "rgba(255,255,255,0.6)" }}>{tag.descEn}</p>
-      <div style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, overflow: "hidden" }}>
-        {Object.entries(tag.specs).map(([key, val]) => (
-          <div key={key} style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "6px 10px", fontSize: 12 }}>
-            <span style={{ color: "rgba(255,255,255,0.4)", width: 100, flexShrink: 0 }}>{key}</span>
-            <span style={{ fontFamily: "monospace" }}>{val}</span>
-          </div>
-        ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Description */}
+      <div>
+        <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 4 }}>
+          {L("Equipment Description", "Description de l'Équipement")}
+        </h4>
+        <p style={{ fontSize: 13, lineHeight: 1.4, color: "rgba(255,255,255,0.85)" }}>{tag.descEn}</p>
       </div>
+
+      {/* Specs table */}
+      {Object.keys(tag.specs).length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Technical Details", "Détails Techniques")}
+          </h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {Object.entries(tag.specs).map(([key, val]) => (
+              <div key={key} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: 3 }}>
+                <span style={{ color: "rgba(255,255,255,0.5)" }}>{key}</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 500, color: key === "Status" && val === "DEROGATION" ? "#ff4d6a" : "#fff" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* DCS panels */}
+      {filteredDcs.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Linked DCS Panels", "Écrans DCS Associés")} ({filteredDcs.length})
+          </h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {filteredDcs.map(d => (
+              <button
+                key={d.id}
+                onClick={() => onPreviewDcs(d.title, d.path)}
+                style={{
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 4, padding: "6px 8px", textAlign: "left", cursor: "pointer",
+                  color: "#00c8ff", display: "flex", alignItems: "center", justifyContent: "space-between"
+                }}
+              >
+                <span style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: 4 }}>{d.title}</span>
+                <ExternalLink size={10} style={{ opacity: 0.7, flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Telemetry tags */}
+      {linkedInstruments.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Telemetry Tags", "Instruments de Télémesure")}
+          </h4>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: "110px", overflowY: "auto", paddingRight: 4 }}>
+            {linkedInstruments.map(ins => (
+              <span key={ins} style={{ fontFamily: "monospace", fontSize: 10, background: "rgba(0,229,160,0.08)", border: "1px solid rgba(0,229,160,0.2)", color: "#00e5a0", padding: "1px 4px", borderRadius: 2 }}>
+                {ins}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Manuals */}
+      {filteredManuals.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
+            {L("Operational Manuals", "Manuels Opérationnels")}
+          </h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {filteredManuals.map(m => (
+              <a
+                key={m.id}
+                href={`https://drive.google.com/file/d/${m.driveId}/view`}
+                target="_blank" rel="noopener noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, fontSize: 12,
+                  color: "#fb923c", textDecoration: "none", background: "rgba(251,146,60,0.05)",
+                  border: "1px solid rgba(251,146,60,0.15)", borderRadius: 4, padding: "6px 10px"
+                }}
+              >
+                <BookOpen size={12} />
+                <span style={{ flex: 1 }}>{m.title}</span>
+                <ExternalLink size={10} />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
-  }
+    }
