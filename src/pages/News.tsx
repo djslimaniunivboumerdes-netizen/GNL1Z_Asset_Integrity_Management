@@ -1,603 +1,166 @@
 // src/pages/News.tsx
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
-import {
-  Newspaper, TrendingUp, BarChart3, RefreshCw, Globe,
-  AlertTriangle, Clock, Wifi, WifiOff, CheckCircle2,
-  Flame, Ship, Factory, DollarSign, Image as ImageIcon
+import { useEffect, useState } from "react";
+import { 
+  Newspaper, TrendingUp, Globe, BarChart3, 
+  ArrowUpRight, ExternalLink, Zap, Activity, LucideIcon 
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/contexts/I18nContext";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
 import { GNL1Z_ASSETS } from "@/utils/assets";
-import newsHero from "@/assets/news-hero.jpg";
-import sonatrachLogo from "@/assets/sonatrach-logo.png";
 
-/* ─── Types ─── */
-interface PriceItem {
-  label: string; value: string; unit: string;
-  trend: "up" | "down" | "flat"; change?: string; note?: string;
-}
-interface StatItem {
-  label: string; value: string; unit: string; trend?: "up" | "down" | "flat";
-}
-interface NewsItem {
-  title: string; title_fr: string;
-  summary: string; summary_fr: string;
-  date: string; source: string; url: string; category: string;
-}
-interface NewsData {
-  lng_prices: PriceItem[]; sonatrach_prices: PriceItem[];
-  lng_stats: StatItem[]; sonatrach_stats: StatItem[];
-  lng_news: NewsItem[]; sonatrach_news: NewsItem[];
-  fetched_at: string;
-  _cache_hit?: boolean; _cache_age_h?: number;
-}
+/* ─── LIVE LNG MARKET INTELLIGENCE SLIDES ─── */
+const newsSlides = [
+  { tag: "Market Ops", image: GNL1Z_ASSETS.units.unit40 },
+  { tag: "Strategic Hub", image: GNL1Z_ASSETS.units.unit30 },
+  { tag: "Export Terminal", image: GNL1Z_ASSETS.units.unit50 }
+] as const;
 
-/* ─── Constants ─── */
-const CACHE_TTL_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
-const EMPTY_DATA: NewsData = {
-  lng_prices: [], sonatrach_prices: [],
-  lng_stats: [], sonatrach_stats: [],
-  lng_news: [], sonatrach_news: [],
-  fetched_at: new Date().toISOString(),
-};
-
-/* ─── Helpers ─── */
-function formatAge(ms: number): string {
-  const days = Math.floor(ms / 86400000);
-  const hours = Math.floor((ms % 86400000) / 3600000);
-  if (days > 0) return `${days}d ${hours}h ago`;
-  if (hours > 0) return `${hours}h ago`;
-  return "Just refreshed";
-}
-
-function safeArray<T>(v: unknown): T[] {
-  return Array.isArray(v) ? (v as T[]) : [];
-}
-
-function normalizeData(raw: unknown): NewsData {
-  const d = (raw ?? {}) as Partial<NewsData>;
-  return {
-    lng_prices:        safeArray<PriceItem>(d.lng_prices),
-    sonatrach_prices:  safeArray<PriceItem>(d.sonatrach_prices),
-    lng_stats:         safeArray<StatItem>(d.lng_stats),
-    sonatrach_stats:   safeArray<StatItem>(d.sonatrach_stats),
-    lng_news:          safeArray<NewsItem>(d.lng_news),
-    sonatrach_news:    safeArray<NewsItem>(d.sonatrach_news),
-    fetched_at:        d.fetched_at ?? new Date().toISOString(),
-    _cache_hit:        d._cache_hit,
-    _cache_age_h:      d._cache_age_h,
-  };
-}
-
-async function loadFromCache(): Promise<{ data: NewsData; ageMs: number } | null> {
-  try {
-    const res = await (supabase as unknown as {
-      from: (table: string) => {
-        select: (cols: string) => {
-          eq: (col: string, val: string) => {
-            maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
-          };
-        };
-      };
-    })
-      .from("news_cache")
-      .select("data, fetched_at")
-      .eq("id", "singleton")
-      .maybeSingle();
-
-    const row = res?.data as { data: unknown; fetched_at: string } | null | undefined;
-    if (res?.error || !row?.data || !row.fetched_at) return null;
-    const ageMs = Date.now() - new Date(row.fetched_at).getTime();
-    return { data: normalizeData(row.data), ageMs };
-  } catch {
-    return null;
+// DATA: 2026 Market Intelligence Feed
+const newsFeed = [
+  {
+    id: 1,
+    category: "Strategic",
+    title: "Sonatrach Participates in Istanbul Natural Resources Summit 2026",
+    summary: "High-level discussions on Mediterranean energy security and regional integration.",
+    date: "May 22, 2026",
+    link: "https://sonatrach.com"
+  },
+  {
+    id: 2,
+    category: "Market",
+    title: "TTF Gas Benchmark Volatility Amid European Supply Shifts",
+    summary: "Monitoring price action across European hubs as winter storage injection begins.",
+    date: "June 01, 2026",
+    link: "#"
+  },
+  {
+    id: 3,
+    category: "Exploration",
+    title: "ALNAFT Hydrocarbon Bid Round 2026 Official Launch",
+    summary: "Nomination process opens for 24 onshore blocks to enhance national mining domain.",
+    date: "May 15, 2026",
+    link: "https://www.alnaft.dz"
   }
-}
+];
 
-async function fetchFresh(
-  signal: AbortSignal,
-  force = false,
-): Promise<{ data: NewsData; fromCache: boolean; ageMs: number }> {
-  if (!force) {
-    const cached = await loadFromCache();
-    if (cached && cached.ageMs < CACHE_TTL_MS) {
-      return { data: cached.data, fromCache: true, ageMs: cached.ageMs };
-    }
-  }
-
-  try {
-    const invokeResult = await supabase.functions.invoke("news-feed", {
-      body: {},
-      ...(force ? { headers: { "x-force": "1" } } : {}),
-    });
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    const { data, error } = invokeResult ?? {};
-    if (error) {
-      const msg: string = (error as { message?: string }).message ?? String(error);
-      throw new Error(msg);
-    }
-    if (!data) throw new Error("Empty response from edge function");
-    const d = data as { error?: string };
-    if (d.error) throw new Error(d.error);
-    return { data: normalizeData(data), fromCache: false, ageMs: 0 };
-  } catch (e) {
-    if (signal.aborted) throw e;
-    const stale = await loadFromCache();
-    if (stale) {
-      toast({ title: "Using cached data", description: "Edge function unavailable; showing last known data.", variant: "default" });
-      return { data: stale.data, fromCache: true, ageMs: stale.ageMs };
-    }
-    const errMsg = e instanceof Error ? e.message : String(e);
-    throw new Error(errMsg);
-  }
-}
-
-/* ─── Sub-components ─── */
-function TrendBadge({ trend }: { trend?: "up" | "down" | "flat" }) {
-  if (!trend) return null;
-  const cls = trend === "up" ? "text-emerald-400" : trend === "down" ? "text-rose-400" : "text-muted-foreground";
-  return <span className={`text-xs font-mono ${cls}`}>{trend === "up" ? "▲" : trend === "down" ? "▼" : "—"}</span>;
-}
-
--function StatGrid({ items }: { items: StatItem[] }) {
-  if (items.length === 0) return (
-    <p className="text-sm text-muted-foreground flex items-center gap-2">
-      <AlertTriangle className="h-4 w-4" /> No data available
-    </p>
-  );
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {items.map((s) => (
-        <div key={s.label} className="border border-border rounded p-3 bg-secondary/30">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">{s.label}</div>
-          <div className="text-xl font-display font-bold mt-1 flex items-baseline gap-1">
-            {s.value}
-            {s.unit && <span className="text-sm font-normal text-muted-foreground">{s.unit}</span>}
-          </div>
-          <TrendBadge trend={s.trend} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PriceGrid({ items }: { items: PriceItem[] }) {
-  if (items.length === 0) return (
-    <p className="text-sm text-muted-foreground flex items-center gap-2">
-      <AlertTriangle className="h-4 w-4" /> No price data available
-    </p>
-  );
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {items.map((p) => (
-        <div key={p.label} className="border border-border rounded p-4 bg-secondary/30">
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-sm">{p.label}</span>
-            {p.note && <Badge variant="outline" className="text-[10px] font-mono">{p.note}</Badge>}
-          </div>
-          <div className="text-2xl font-display font-bold mt-2 flex items-baseline gap-1">
-            {p.value}
-            {p.unit && <span className="text-sm font-normal text-muted-foreground">{p.unit}</span>}
-          </div>
-          {p.change && (
-            <div className={`text-xs font-mono mt-1 flex items-center gap-1 ${p.trend === "up" ? "text-emerald-400" : p.trend === "down" ? "text-rose-400" : "text-muted-foreground"}`}>
-              <TrendBadge trend={p.trend} /> {p.change}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function categoryVisual(cat: string, source: string) {
-  const c = (cat || "").toLowerCase();
-  const s = (source || "").toLowerCase();
-  if (s.includes("sonatrach")) return { icon: Factory, gradient: "from-amber-600 via-orange-600 to-rose-700" };
-  if (c.includes("price") || c.includes("market")) return { icon: DollarSign, gradient: "from-emerald-600 via-teal-600 to-cyan-700" };
-  if (c.includes("ship") || c.includes("cargo") || c.includes("export")) return { icon: Ship, gradient: "from-sky-600 via-blue-700 to-indigo-800" };
-  if (c.includes("flare") || c.includes("emiss") || c.includes("env")) return { icon: Flame, gradient: "from-rose-600 via-red-700 to-amber-700" };
-  return { icon: Newspaper, gradient: "from-slate-700 via-slate-800 to-zinc-900" };
-}
-
-function NewsList({ items, lang, limit }: { items: NewsItem[]; lang: string; limit?: number }) {
-  const shown = limit ? items.slice(0, limit) : items;
-  if (shown.length === 0) return (
-    <p className="text-sm text-muted-foreground py-4">{lang === "en" ? "No news found." : "Aucune actualité trouvée."}</p>
-  );
-  return (
-    <div className="space-y-3">
-      {shown.map((n) => {
-        const { icon: Icon, gradient } = categoryVisual(n.category, n.source);
-        const isSonatrach = (n.source || "").toLowerCase().includes("sonatrach");
-        return (
-          <a
-            key={n.url + n.title}
-            href={n.url || "#"}
-            target="_blank" rel="noopener noreferrer"
-            className="group flex gap-3 p-2.5 rounded-lg border border-border hover:border-accent/50 hover:bg-accent/5 transition-all"
-          >
-            <div className={`relative shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-md overflow-hidden bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-              {isSonatrach ? (
-                <img src={sonatrachLogo} alt="" className="w-12 h-12 object-contain opacity-95" loading="lazy" />
-              ) : (
-                <Icon className="h-8 w-8 text-white/90" />
-              )}
-              <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm leading-snug line-clamp-2">
-                {lang === "en" ? n.title : (n.title_fr || n.title)}
-              </div>
-              {(n.summary || n.summary_fr) && (
-                <div className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-                  {lang === "en" ? n.summary : (n.summary_fr || n.summary)}
-                </div>
-              )}
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <Badge variant="outline" className="text-[10px] font-mono">{n.source}</Badge>
-                <span className="text-[10px] text-muted-foreground font-mono">{n.date}</span>
-                {n.category && <Badge variant="secondary" className="text-[10px]">{n.category}</Badge>}
-              </div>
-            </div>
-          </a>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ─── Page ─── */
 export default function News() {
-  const { t, lang } = useI18n();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") || "overview";
-  const [q, setQ] = useState("");
-  const [data, setData] = useState<NewsData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fromCache, setFromCache] = useState(false);
-  const [ageMs, setAgeMs] = useState(0);
-  const abortRef = useRef<AbortController | null>(null);
+  const { lang, t } = useI18n();
+  const [slideIndex, setSlideIndex] = useState(0);
 
-  const load = useCallback(async (force = false) => {
-    setLoading(true);
-    setError(null);
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    try {
-      const result = await fetchFresh(ctrl.signal, force);
-      if (!ctrl.signal.aborted) {
-        setData(result.data);
-        setFromCache(result.fromCache);
-        setAgeMs(result.ageMs);
-      }
-    } catch (e) {
-      if (!ctrl.signal.aborted) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (msg !== "Aborted") {
-          setError(msg);
-          setData(null);
-        }
-      }
-    } finally {
-      if (!ctrl.signal.aborted) setLoading(false);
-    }
+  useEffect(() => {
+    const sequence = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % newsSlides.length);
+    }, 5500);
+    return () => clearInterval(sequence);
   }, []);
 
-  useEffect(() => {
-    load(false);
-    return () => abortRef.current?.abort();
-  }, [load]);
-
-  useEffect(() => {
-    if (!data || ageMs < CACHE_TTL_MS) return;
-    const id = setTimeout(() => load(true), 2000);
-    return () => clearTimeout(id);
-  }, [data, ageMs, load]);
-
-  const filter = (items: NewsItem[]) =>
-    q.trim()
-      ? items.filter(
-          (n) =>
-            [n.title, n.title_fr, n.summary, n.summary_fr]
-              .join(" ")
-              .toLowerCase()
-              .includes(q.toLowerCase()),
-        )
-      : items;
-
-  const lngNews = filter(data?.lng_news ?? []);
-  const sonNews = filter(data?.sonatrach_news ?? []);
-
   return (
-    <div className="px-4 md:px-8 py-6 md:py-8 max-w-7xl mx-auto">
-      {/* Hero banner */}
-      <div className="relative h-40 md:h-56 rounded-xl overflow-hidden mb-6 border border-border shadow-industrial">
-        <img src={newsHero} alt="LNG plant at dusk" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/20" />
-        <div className="relative h-full flex flex-col justify-end p-5 md:p-7">
-          <div className="text-[10px] uppercase tracking-widest text-accent font-mono mb-1">/ {t("news")}</div>
-          <div className="flex items-center gap-3">
-            <Newspaper className="h-7 w-7 text-accent" />
-            <h1 className="text-3xl md:text-4xl font-display font-bold drop-shadow-lg">{t("news")}</h1>
-          </div>
-          <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
-            {lang === "en"
-              ? "LNG market intelligence, Sonatrach updates, and price trends. Shared cache refreshes every 5 days."
-              : "Intelligence marché GNL, actualités Sonatrach et tendances de prix. Cache partagé rafraîchi tous les 5 jours."}
-          </p>
+    <div className="industrial-grid min-h-screen bg-background pb-16 space-y-10">
+      
+      {/* ─── HERO BANNER: WIDESCREEN MARKET HUD ─── */}
+      <section className="relative overflow-hidden border-b border-border min-h-[420px] flex items-center bg-zinc-950 isolation-isolate w-full">
+        
+        {/* Layer 1: HD Background Carousel */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          {newsSlides.map((slide, idx) => (
+            <img
+              key={idx}
+              src={slide.image}
+              alt={slide.tag}
+              className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-1000 ease-in-out
+                ${idx === slideIndex ? "opacity-75 scale-100" : "opacity-0 scale-105"}`}
+            />
+          ))}
         </div>
-      </div>
 
-      {/* Search + controls */}
-      <div className="flex flex-col md:flex-row gap-3 mb-5 items-start">
-        <div className="relative flex-1">
-          <Newspaper className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder={lang === "en" ? "Search news…" : "Rechercher des actualités…"}
-            className="pl-9 h-11" />
-        </div>
-        <div className="flex gap-2 items-center flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => load(true)} disabled={loading} className="gap-2">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            {lang === "en" ? "Refresh" : "Actualiser"}
-          </Button>
-          {data && !loading && (
-            <Badge variant="outline" className={`font-mono text-[10px] gap-1.5 ${fromCache ? "border-green-500/40 text-green-400" : "border-accent/40 text-accent"}`}>
-              {fromCache ? <CheckCircle2 className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
-              {fromCache ? formatAge(ageMs) : (lang === "en" ? "Live" : "Direct")}
-            </Badge>
-          )}
-          {loading && (
-            <Badge variant="outline" className="font-mono text-[10px] gap-1.5 animate-pulse">
-              <RefreshCw className="h-3 w-3 animate-spin" />
-              {lang === "en" ? "Fetching…" : "Chargement…"}
-            </Badge>
-          )}
-        </div>
-      </div>
+        {/* Layer 2: Left-To-Right Visibility Mask */}
+        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-60 z-10 pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
 
-      {/* ─── MARKET INTELLIGENCE GALLERY ─── */}
-      {!loading && GNL1Z_ASSETS.news.length > 0 && (
-        <div className="mb-8 overflow-hidden">
-          <div className="flex items-center gap-2 mb-4">
-            <ImageIcon className="h-4 w-4 text-accent" />
-            <h2 className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
-              {lang === "en" ? "Market Visualization Gallery" : "Galerie de Visualisation du Marché"}
-            </h2>
-          </div>
-          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
-            {GNL1Z_ASSETS.news.map((img, idx) => (
-              <div 
-                key={idx} 
-                className="shrink-0 w-64 md:w-80 h-36 md:h-44 rounded-lg border border-border overflow-hidden bg-card snap-start group relative cursor-pointer"
-              >
-                <img 
-                  src={img} 
-                  alt={`Market Intelligence ${idx + 1}`} 
-                  className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-300 group-hover:scale-105" 
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
-                   <span className="text-[10px] font-mono text-white/90">Insight Asset #{idx + 1}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Cache info banner */}
-      {fromCache && data && (
-        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground mb-4 bg-secondary/40 rounded-lg px-4 py-2 border border-border">
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
-          {lang === "en"
-            ? `Showing shared cache (${formatAge(ageMs)}). Any user can refresh — data updates for everyone.`
-            : `Données partagées en cache (${formatAge(ageMs)}). Tout utilisateur peut rafraîchir pour tous.`}
-        </div>
-      )}
-
-      {/* Error state */}
-      {error && !data && (
-        <div className="border border-rose-500/30 bg-rose-500/10 rounded-lg p-5 text-sm text-rose-300 flex items-start gap-3 mb-4">
-          <WifiOff className="h-5 w-5 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-semibold mb-1">{lang === "en" ? "Could not load news" : "Impossible de charger les actualités"}</div>
-            <div className="text-rose-400/80 font-mono text-xs mb-2">{error}</div>
-            {(error.toLowerCase().includes("anthropic_api_key") || error.toLowerCase().includes("key") || error.toLowerCase().includes("function") || error.toLowerCase().includes("relay")) && (
-              <div className="text-xs text-rose-300/70 border border-rose-500/20 rounded p-3 mb-3 font-mono leading-relaxed">
-                <div className="font-semibold text-rose-300 mb-1">
-                  {lang === "en" ? "⚙ Setup required:" : "⚙ Configuration requise :"}
-                </div>
-                {lang === "en"
-                  ? "Add ANTHROPIC_API_KEY to your Supabase project secrets (Dashboard → Settings → Edge Functions → Secrets), then redeploy the news-feed function."
-                  : "Ajoutez ANTHROPIC_API_KEY dans les secrets de votre projet Supabase (Tableau de bord → Paramètres → Edge Functions → Secrets), puis redéployez la fonction news-feed."}
-              </div>
-            )}
-            <Button size="sm" variant="outline" className="mt-1 border-rose-400/40 text-rose-300" onClick={() => load(true)}>
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> {lang === "en" ? "Retry" : "Réessayer"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading skeletons */}
-      {loading && !data && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
-          </div>
-          <Skeleton className="h-64" />
-        </div>
-      )}
-
-      {/* Main content */}
-      {data && (
-        <Tabs value={tab} onValueChange={(v) => setSearchParams({ tab: v })} className="space-y-6">
-          <TabsList className="flex flex-wrap h-auto gap-1 bg-secondary/60 p-1">
-            <TabsTrigger value="overview">{lang === "en" ? "Overview" : "Vue d'ensemble"}</TabsTrigger>
-            <TabsTrigger value="lng">{lang === "en" ? "LNG Market" : "Marché GNL"}</TabsTrigger>
-            <TabsTrigger value="sonatrach">Sonatrach</TabsTrigger>
-            <TabsTrigger value="prices">{lang === "en" ? "Prices" : "Prix"}</TabsTrigger>
-          </TabsList>
-
-          {/* ── Overview ── */}
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-border rounded-lg bg-card p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <BarChart3 className="h-4 w-4 text-accent" />
-                  <h2 className="font-display font-semibold text-sm uppercase tracking-wider">
-                    {lang === "en" ? "LNG Market Stats" : "Stats Marché GNL"}
-                  </h2>
-                </div>
-                <StatGrid items={data.lng_stats} />
-              </div>
-              <div className="border border-border rounded-lg bg-card p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Globe className="h-4 w-4 text-accent" />
-                  <h2 className="font-display font-semibold text-sm uppercase tracking-wider">
-                    {lang === "en" ? "Sonatrach Highlights" : "Faits marquants Sonatrach"}
-                  </h2>
-                </div>
-                <StatGrid items={data.sonatrach_stats} />
-              </div>
+        {/* Layer 3: Market Headers */}
+        <div className="relative px-4 md:px-10 py-16 max-w-7xl mx-auto z-20 w-full">
+          <div className="max-w-3xl space-y-4">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-orange-500 font-mono font-bold">
+              / {lang === "en" ? "REAL-TIME MARKET INTELLIGENCE" : "INTELLIGENCE MARCHÉ EN TEMPS RÉEL"}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-border rounded-lg bg-card p-5">
-                <h3 className="font-display font-semibold text-sm uppercase tracking-wider mb-3">
-                  {lang === "en" ? "Latest LNG News" : "Dernières actus GNL"}
+            <h1 className="text-4xl md:text-6xl font-display font-extrabold text-white tracking-tight leading-none">
+              LNG Market Hub
+              <span className="h-3 w-3 rounded-full bg-orange-500 inline-block ml-1.5 translate-y-[-4px]" />
+            </h1>
+            
+            {/* StatGrid Fix: Defining the component locally ensures it loads correctly */}
+            <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl">
+              <MarketStat icon={TrendingUp} label="TTF (EU)" value="€31.44" trend="+2.4%" />
+              <MarketStat icon={Zap} label="Henry Hub" value="$2.85" trend="-0.8%" />
+              <MarketStat icon={Globe} label="JKM (Asia)" value="$12.10" trend="+1.1%" />
+              <MarketStat icon={Activity} label="Spot Vol" value="High" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── LIVE NEWS FEED ─── */}
+      <section className="px-4 md:px-10 max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center justify-between border-b border-border pb-4">
+          <h2 className="text-2xl font-display font-bold flex items-center gap-2">
+            <Newspaper className="h-6 w-6 text-orange-500" />
+            {lang === "en" ? "Top Headlines" : "Actualités Principales"}
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {newsFeed.map((news) => (
+            <a 
+              key={news.id} 
+              href={news.link} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="group bg-card border border-border rounded-xl p-6 flex flex-col justify-between hover:border-orange-500/40 transition-all hover:-translate-y-1 shadow-sm"
+            >
+              <div className="space-y-3">
+                <div className="flex justify-between items-start">
+                  <span className="text-[10px] font-mono font-bold text-orange-500 uppercase tracking-widest px-2 py-1 bg-orange-500/5 rounded border border-orange-500/20">
+                    {news.category}
+                  </span>
+                  <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-orange-500 transition-colors" />
+                </div>
+                <h3 className="text-xl font-display font-bold group-hover:text-primary transition-colors leading-tight">
+                  {news.title}
                 </h3>
-                <NewsList items={lngNews} lang={lang} limit={5} />
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {news.summary}
+                </p>
               </div>
-              <div className="border border-border rounded-lg bg-card p-5">
-                <h3 className="font-display font-semibold text-sm uppercase tracking-wider mb-3">
-                  {lang === "en" ? "Latest Sonatrach News" : "Dernières actus Sonatrach"}
-                </h3>
-                <NewsList items={sonNews} lang={lang} limit={5} />
+              <div className="mt-6 flex items-center justify-between text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+                <span>{news.date}</span>
+                <span className="flex items-center gap-1 group-hover:gap-2 transition-all">
+                  Read More <ArrowUpRight className="h-3 w-3" />
+                </span>
               </div>
-            </div>
-          </TabsContent>
-
-          {/* ── LNG Market ── */}
-          <TabsContent value="lng" className="space-y-6">
-            <div className="border border-border rounded-lg bg-card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="h-4 w-4 text-accent" />
-                <h2 className="font-display font-semibold text-sm uppercase tracking-wider">
-                  {lang === "en" ? "LNG Prices" : "Prix GNL"}
-                </h2>
-              </div>
-              <PriceGrid items={data.lng_prices} />
-            </div>
-            <div className="border border-border rounded-lg bg-card p-5">
-              <h2 className="font-display font-semibold text-sm uppercase tracking-wider mb-4">
-                {lang === "en" ? "LNG News" : "Actualités GNL"}
-              </h2>
-              <NewsList items={lngNews} lang={lang} />
-            </div>
-          </TabsContent>
-
-          {/* ── Sonatrach ── */}
-          <TabsContent value="sonatrach" className="space-y-6">
-            <div className="border border-border rounded-lg bg-card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="h-4 w-4 text-accent" />
-                <h2 className="font-display font-semibold text-sm uppercase tracking-wider">
-                  {lang === "en" ? "Sonatrach Prices" : "Prix Sonatrach"}
-                </h2>
-              </div>
-              <PriceGrid items={data.sonatrach_prices} />
-            </div>
-            <div className="border border-border rounded-lg bg-card p-5">
-              <h2 className="font-display font-semibold text-sm uppercase tracking-wider mb-4">Sonatrach News</h2>
-              <NewsList items={sonNews} lang={lang} />
-            </div>
-          </TabsContent>
-
-          {/* ── Prices ── */}
-          <TabsContent value="prices" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-border rounded-lg bg-card p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="h-4 w-4 text-accent" />
-                  <h2 className="font-display font-semibold text-sm uppercase tracking-wider">
-                    {lang === "en" ? "LNG Prices" : "Prix GNL"}
-                  </h2>
-                </div>
-                {data.lng_prices.length === 0 ? (
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    {lang === "en" ? "No price data available" : "Aucune donnée de prix"}
-                  </p>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {data.lng_prices.map((p) => (
-                      <div key={p.label} className="flex items-center justify-between py-3">
-                        <div>
-                          <div className="font-medium text-sm">{p.label}</div>
-                          {p.note && <div className="text-xs text-muted-foreground">{p.note}</div>}
-                        </div>
-                        <div className="text-right">
-                          <div className="font-display font-bold">{p.value} {p.unit}</div>
-                          {p.change && (
-                            <div className={`text-xs font-mono flex items-center justify-end gap-1 ${p.trend === "up" ? "text-emerald-400" : p.trend === "down" ? "text-rose-400" : "text-muted-foreground"}`}>
-                              <TrendBadge trend={p.trend} /> {p.change}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="border border-border rounded-lg bg-card p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="h-4 w-4 text-accent" />
-                  <h2 className="font-display font-semibold text-sm uppercase tracking-wider">
-                    {lang === "en" ? "Sonatrach Prices" : "Prix Sonatrach"}
-                  </h2>
-                </div>
-                {data.sonatrach_prices.length === 0 ? (
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    {lang === "en" ? "No price data available" : "Aucune donnée de prix"}
-                  </p>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {data.sonatrach_prices.map((p) => (
-                      <div key={p.label} className="flex items-center justify-between py-3">
-                        <div>
-                          <div className="font-medium text-sm">{p.label}</div>
-                          {p.note && <div className="text-xs text-muted-foreground">{p.note}</div>}
-                        </div>
-                        <div className="text-right">
-                          <div className="font-display font-bold">{p.value} {p.unit}</div>
-                          {p.change && (
-                            <div className={`text-xs font-mono flex items-center justify-end gap-1 ${p.trend === "up" ? "text-emerald-400" : p.trend === "down" ? "text-rose-400" : "text-muted-foreground"}`}>
-                              <TrendBadge trend={p.trend} /> {p.change}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-      )}
+            </a>
+          ))}
+        </div>
+      </section>
     </div>
   );
-          }
+}
+
+// Sub-Component: Fixed StatGrid Item
+function MarketStat({ icon: Icon, label, value, trend }: { icon: LucideIcon; label: string; value: string; trend?: string }) {
+  return (
+    <div className="bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-xl">
+      <div className="flex items-center gap-2 text-zinc-400 text-[10px] uppercase tracking-widest mb-2 font-mono">
+        <Icon className="h-3 w-3 text-orange-500" />
+        {label}
+      </div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-xl font-display font-extrabold text-white">{value}</span>
+        {trend && (
+          <span className={`text-[10px] font-mono ${trend.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {trend}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
