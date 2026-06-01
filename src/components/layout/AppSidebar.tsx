@@ -19,7 +19,6 @@ export function AppSidebar() {
     { title: t("equipment"), url: "/equipment", icon: Database },
     { title: t("dcs"), url: "/dcs", icon: Cpu },
     { title: "Smart Flow", url: "/smart-flow", icon: GitBranch },
-    { title: "Process Flow", url: "/flow", icon: Workflow },
     { title: t("news"), url: "/news", icon: Newspaper },
     { title: t("manuals"), url: "/manuals", icon: BookOpen },
     { title: t("author"), url: "/author", icon: User },
