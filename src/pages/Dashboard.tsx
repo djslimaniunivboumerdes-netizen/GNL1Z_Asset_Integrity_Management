@@ -1,3 +1,4 @@
+// src/pages/Dashboard.tsx
 import { Link } from "react-router-dom";
 import { ArrowRight, Database, Cpu, BookOpen, User, Info, Factory, Activity, Package, Workflow, Newspaper, FileText } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -13,6 +14,50 @@ const moduleCards = [
   { key: "news",      to: "/news",       icon: Newspaper, accent: false, descEn: "Live LNG market intelligence — spot prices, top 10 headlines and Sonatrach updates.",            descFr: "Intelligence marché GNL en direct — prix spot, top 10 actualités et mises à jour Sonatrach."   },
   { key: "manuals",   to: "/manuals",    icon: BookOpen,  accent: false, descEn: "Operational procedures in 23 documents (S01 → S15) covering all systems.",                       descFr: "Procédures opérationnelles en 23 documents (S01 → S15) couvrant tous les systèmes."             },
   { key: "author",    to: "/author",     icon: User,      accent: false, descEn: "Project author, credentials, ORCID, contact channels and mobile app downloads.",                 descFr: "Auteur du projet, références, ORCID, canaux de contact et téléchargements de l'application."  },
+] as const;
+
+/* ─── NEW: 5 Plant Sector Images with Multilingual Attributes ─── */
+const plantSectors = [
+  {
+    id: "mche",
+    tag: "Unit 40",
+    nameEn: "Main Cryogenic Heat Exchanger",
+    nameFr: "Échangeur Cryogénique Principal",
+    status: "Normal",
+    image: "https://images.unsplash.com/photo-1581094120546-4971c461356e?auto=format&fit=crop&q=80&w=600"
+  },
+  {
+    id: "compression",
+    tag: "Unit 30",
+    nameEn: "MCR Centrifugal Compressors",
+    nameFr: "Compresseurs Centrifuges MCR",
+    status: "Monitoring",
+    image: "https://images.unsplash.com/photo-1537462715879-360eeb61a0bc?auto=format&fit=crop&q=80&w=600"
+  },
+  {
+    id: "containment",
+    tag: "Unit 50",
+    nameEn: "Cryogenic LNG Storage Tanks",
+    nameFr: "Bacs de Stockage Cryogénique GNL",
+    status: "Normal",
+    image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=600"
+  },
+  {
+    id: "marine",
+    tag: "Unit 60",
+    nameEn: "Marine Loading Berth Infrastructure",
+    nameFr: "Infrastructures d'Appontement Maritime",
+    status: "Standby",
+    image: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&q=80&w=600"
+  },
+  {
+    id: "utilities",
+    tag: "Unit 70",
+    nameEn: "Steam Generation & Boiler Systems",
+    nameFr: "Génération de Vapeur & Chaudières",
+    status: "Normal",
+    image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=600"
+  }
 ] as const;
 
 export default function Dashboard() {
@@ -50,6 +95,51 @@ export default function Dashboard() {
       </section>
 
       <div className="pt-8"><TestScheduleWidget /></div>
+
+      {/* ─── NEW: Plant Sectors Section ─── */}
+      <section className="px-4 md:px-10 pt-10 max-w-7xl mx-auto">
+        <div className="mb-6">
+          <div className="text-[10px] uppercase tracking-widest text-accent font-mono mb-1">
+            / {lang === "en" ? "Process Areas" : "Zones de Procédé"}
+          </div>
+          <h2 className="text-2xl md:text-3xl font-display font-bold">
+            {lang === "en" ? "Facility Sector Matrix" : "Matrice des Secteurs de l'Usine"}
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {plantSectors.map((sector) => (
+            <div 
+              key={sector.id} 
+              className="group relative overflow-hidden rounded-lg border border-border bg-card/40 backdrop-blur-sm transition-all hover:border-accent/30"
+            >
+              <div className="h-28 w-full overflow-hidden relative border-b border-border">
+                <img 
+                  src={sector.image} 
+                  alt={lang === "en" ? sector.nameEn : sector.nameFr} 
+                  className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-2 left-2 text-[9px] font-mono uppercase bg-background/90 text-accent px-1.5 py-0.5 rounded border border-border">
+                  {sector.tag}
+                </span>
+              </div>
+              <div className="p-3.5">
+                <h4 className="text-xs font-bold font-display line-clamp-1 tracking-tight text-foreground/95">
+                  {lang === "en" ? sector.nameEn : sector.nameFr}
+                </h4>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    sector.status === 'Normal' ? 'bg-emerald-500' : sector.status === 'Standby' ? 'bg-amber-500' : 'bg-cyan-500'
+                  }`} />
+                  <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">
+                    {sector.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Modules */}
       <section className="px-4 md:px-10 py-10 max-w-7xl mx-auto">
