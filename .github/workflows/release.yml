@@ -4,6 +4,10 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag (e.g. v2.1.0)"
+        required: true
 
 concurrency:
   group: release-${{ github.ref }}
@@ -12,74 +16,303 @@ concurrency:
 permissions:
   contents: write
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared env
+# ─────────────────────────────────────────────────────────────────────────────
+env:
+  APP_NAME: GNL1Z
+  VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+  VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
 jobs:
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. WINDOWS  (.exe NSIS installer)
+# ═════════════════════════════════════════════════════════════════════════════
   build-windows:
+    name: "🪟 Windows EXE"
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: latest }
-      - run: bun install --frozen-lockfile
-      - name: Build Vite (electron base)
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build web assets (electron mode — relative base)
         run: bun run build:electron
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-      - name: Build EXE
-        run: bunx electron-builder --win --x64 --publish never
+
+      - name: Package Windows EXE
+        run: bun run electron:pack:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/upload-artifact@v4
-        with: { name: windows-exe, path: release/*.exe, retention-days: 30 }
 
+      - name: Rename artifact
+        shell: pwsh
+        run: |
+          $src = Get-ChildItem release -Filter "*.exe" | Select-Object -First 1
+          Rename-Item $src.FullName "GNL1Z-Setup-Windows-x64.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: release/GNL1Z-Setup-Windows-x64.exe
+          retention-days: 7
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. LINUX  (.AppImage)
+# ═════════════════════════════════════════════════════════════════════════════
   build-linux:
+    name: "🐧 Linux AppImage"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: latest }
-      - run: bun install --frozen-lockfile
-      - name: Build Vite (electron base)
-        run: bun run build:electron
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-      - name: Build AppImage
-        run: bunx electron-builder --linux --publish never
-      - uses: actions/upload-artifact@v4
-        with: { name: linux-appimage, path: release/*.AppImage, retention-days: 30 }
 
-  create-release:
-    needs: [build-windows, build-linux]
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build web assets (electron mode)
+        run: bun run build:electron
+
+      - name: Package Linux AppImage
+        run: bun run electron:pack:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename artifact
+        run: |
+          mv release/*.AppImage release/GNL1Z-Linux-x64.AppImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: release/GNL1Z-Linux-x64.AppImage
+          retention-days: 7
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. ANDROID  (.apk via Capacitor + Gradle)
+# ═════════════════════════════════════════════════════════════════════════════
+  build-android:
+    name: "🤖 Android APK"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: gradle
+
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Build the web app normally (NOT electron mode; Capacitor needs /dist with base "/")
+      - name: Build web assets
+        run: bun run build
+
+      # Capacitor: create the android/ project and sync web assets into it
+      - name: Initialise Capacitor Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      # Optional: replace app icon (uses the 512×512 public icon)
+      - name: Copy app icons
+        run: |
+          MIPMAP=android/app/src/main/res
+          for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p $MIPMAP/mipmap-$size
+          done
+
+      # ── Release build (signed) ──────────────────────────────────────────────
+      # Set the four secrets below in Settings → Secrets → Actions:
+      #   KEYSTORE_BASE64      → base64 of your .jks file
+      #   KEYSTORE_PASSWORD    → storePassword
+      #   KEY_ALIAS            → keyAlias
+      #   KEY_PASSWORD         → keyPassword
+      # Generate once:  keytool -genkey -v -keystore gnl1z.jks -alias gnl1z \
+      #                   -keyalg RSA -keysize 2048 -validity 10000
+      #                 base64 gnl1z.jks | pbcopy
+
+      - name: Build release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Sign APK
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > /tmp/gnl1z.jks
+          APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          $JAVA_HOME/bin/jarsigner \
+            -verbose \
+            -sigalg SHA256withRSA \
+            -digestalg SHA-256 \
+            -keystore /tmp/gnl1z.jks \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            -keypass  "${{ secrets.KEY_PASSWORD }}" \
+            "$APK" "${{ secrets.KEY_ALIAS }}"
+          $JAVA_HOME/bin/java -jar \
+            $ANDROID_SDK_ROOT/build-tools/$(ls $ANDROID_SDK_ROOT/build-tools | tail -1)/lib/apksigner.jar \
+            verify "$APK" || true
+          cp "$APK" GNL1Z-Android.apk
+
+      - name: Use debug-signed APK (no signing secrets supplied)
+        if: ${{ secrets.KEYSTORE_BASE64 == '' }}
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../GNL1Z-Android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: GNL1Z-Android.apk
+          retention-days: 7
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. iOS  (.ipa via Capacitor + Xcode)
+#
+#  Requires these secrets in Settings → Secrets → Actions:
+#    IOS_BUILD_CERTIFICATE_BASE64    → P12 distribution cert (base64)
+#    IOS_BUILD_CERTIFICATE_PASSWORD  → P12 password
+#    IOS_PROVISION_PROFILE_BASE64    → .mobileprovision file (base64)
+#    IOS_KEYCHAIN_PASSWORD           → any random string
+#    APPLE_TEAM_ID                   → your 10-char Apple Team ID
+#
+#  Obtain from: https://developer.apple.com/account/resources/certificates
+#
+#  Uncomment this job once you have the secrets ready.
+# ═════════════════════════════════════════════════════════════════════════════
+#
+#  build-ios:
+#    name: "🍎 iOS IPA"
+#    runs-on: macos-14
+#    timeout-minutes: 60
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: oven-sh/setup-bun@v2
+#        with: { bun-version: latest }
+#      - run: bun install --frozen-lockfile
+#      - name: Build web assets
+#        run: bun run build
+#      - name: Capacitor sync iOS
+#        run: |
+#          npx cap add ios
+#          npx cap sync ios
+#      - name: Install Apple Certificate
+#        env:
+#          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+#          P12_PASSWORD: ${{ secrets.IOS_BUILD_CERTIFICATE_PASSWORD }}
+#          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+#        run: |
+#          CERT_PATH=$RUNNER_TEMP/build_certificate.p12
+#          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+#          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERT_PATH
+#          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+#          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+#          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+#          security import $CERT_PATH -P "$P12_PASSWORD" -A \
+#            -t cert -f pkcs12 -k $KEYCHAIN_PATH
+#          security list-keychain -d user -s $KEYCHAIN_PATH
+#      - name: Install Provisioning Profile
+#        env:
+#          PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+#        run: |
+#          PP_PATH=$RUNNER_TEMP/gnl1z.mobileprovision
+#          echo -n "$PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+#          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+#          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+#      - name: Build IPA
+#        run: |
+#          xcodebuild -workspace ios/App/App.xcworkspace \
+#            -scheme App \
+#            -configuration Release \
+#            -archivePath $RUNNER_TEMP/App.xcarchive \
+#            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+#            -allowProvisioningUpdates \
+#            archive
+#          xcodebuild -exportArchive \
+#            -archivePath $RUNNER_TEMP/App.xcarchive \
+#            -exportOptionsPlist ios/ExportOptions.plist \
+#            -exportPath $RUNNER_TEMP/export
+#          cp $RUNNER_TEMP/export/*.ipa GNL1Z-iOS.ipa
+#      - uses: actions/upload-artifact@v4
+#        with: { name: ios-ipa, path: GNL1Z-iOS.ipa, retention-days: 7 }
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. GITHUB RELEASE  — collects all artifacts and publishes
+# ═════════════════════════════════════════════════════════════════════════════
+  publish-release:
+    name: "🚀 Publish GitHub Release"
+    needs: [build-windows, build-linux, build-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+
+      # Download every artifact built above
       - uses: actions/download-artifact@v4
-        with: { name: windows-exe, path: ./release-assets/ }
+        with: { name: windows-exe,    path: ./dist-release/ }
       - uses: actions/download-artifact@v4
-        with: { name: linux-appimage, path: ./release-assets/ }
-      - id: ver
-        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
-      - uses: softprops/action-gh-release@v2
+        with: { name: linux-appimage, path: ./dist-release/ }
+      - uses: actions/download-artifact@v4
+        with: { name: android-apk,    path: ./dist-release/ }
+
+      # Compute SHA-256 checksums for the security panel on the download page
+      - name: Generate checksums
+        working-directory: ./dist-release
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.ver.outputs.version }}
-          name: "GNL1Z v${{ steps.ver.outputs.version }}"
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "GNL1Z ${{ steps.ver.outputs.tag }} — Sonatrach Arzew"
           body: |
-            ## GNL1Z Asset Management — Sonatrach Arzew
+            ## GNL1Z Asset Management ${{ steps.ver.outputs.tag }}
+            **Sonatrach GNL1Z — Industrial Asset Management System**
 
-            | Platform | Download |
-            |---|---|
-            | Android | `GNL1Z-Android.apk` (attach manually) |
-            | Windows | `GNL1Z-Setup-*.exe` |
-            | Linux   | `GNL1Z-*.AppImage` |
-            | Web     | https://gnl1z-sonatrach.workers.dev |
+            | Platform | File | Notes |
+            |---|---|---|
+            | 🤖 Android | `GNL1Z-Android.apk` | Android 7.0+ · Enable Unknown Sources |
+            | 🪟 Windows | `GNL1Z-Setup-Windows-x64.exe` | Windows 10/11 x64 |
+            | 🐧 Linux | `GNL1Z-Linux-x64.AppImage` | `chmod +x` then run |
+            | 🍎 iOS | [TestFlight invite]() | Contact admin for access |
+            | 🌐 Web PWA | [Open in browser](https://gnl1z-sonatrach.workers.dev) | Works offline |
 
-            **Android install:** Download APK → Settings → Allow Unknown Sources → Install
-          files: ./release-assets/*
+            ### Android install
+            1. Download `GNL1Z-Android.apk`
+            2. Settings → Security → Enable **Unknown Sources** (or **Install Unknown Apps**)
+            3. Open the APK and tap Install
+
+            ### Verify file integrity
+            ```
+            sha256sum -c SHA256SUMS.txt
+            ```
+          files: |
+            ./dist-release/*
           draft: false
           generate_release_notes: true
         env:
