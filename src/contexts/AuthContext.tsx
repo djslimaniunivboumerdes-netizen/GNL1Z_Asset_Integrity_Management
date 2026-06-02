@@ -57,13 +57,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
-  const signInWithGoogle: AuthContextType["signInWithGoogle"] = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/` },
-    });
-    return { error };
-  };
+  // src/contexts/AuthContext.tsx
+const signInWithGoogle: AuthContextType["signInWithGoogle"] = async () => {
+  // Always redirect back to the canonical origin, not a preview URL
+  const redirectTo = import.meta.env.VITE_APP_URL ?? window.location.origin;
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${redirectTo}/` },
+  });
+  return { error };
+};
 
   const signOut = async () => {
     await supabase.auth.signOut();
