@@ -16,6 +16,8 @@ export const supabase = createClient<Database>(
       storage: typeof window !== 'undefined' ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: true,   // ← required for PKCE OAuth callback
+      flowType: 'pkce',           // ← explicit; Supabase v2 default but needed here
     },
   }
 );
