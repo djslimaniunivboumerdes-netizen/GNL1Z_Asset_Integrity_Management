@@ -20,6 +20,7 @@ import News from "./pages/News";
 import Author from "./pages/Author";
 import DownloadPage from "./pages/DownloadPage";
 import Auth from "./pages/Auth";
+import AuthCallback from "./pages/AuthCallback";
 import LogTest from "./pages/LogTest";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -36,21 +37,23 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route element={<AppLayout />}>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/equipment" element={<EquipmentList />} />
-                  <Route path="/equipment/:tag" element={<EquipmentDetail />} />
+                  <Route path="/"                   element={<Dashboard />} />
+                  <Route path="/about"              element={<About />} />
+                  <Route path="/equipment"          element={<EquipmentList />} />
+                  <Route path="/equipment/:tag"     element={<EquipmentDetail />} />
                   <Route path="/equipment/:tag/log" element={<LogTest />} />
-                  <Route path="/dcs" element={<DcsDirectory />} />
-                  <Route path="/dcs/:id" element={<DcsDetail />} />
-                  <Route path="/manuals" element={<Manuals />} />
-                  <Route path="/flow" element={<ProcessFlow />} />
-                  <Route path="/smart-flow" element={<SmartFlow />} />
-                  <Route path="/news" element={<News />} />
-                  <Route path="/author" element={<Author />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/download" element={<DownloadPage lang="en" />} />
-                  <Route path="*" element={<NotFound />} />
+                  <Route path="/dcs"                element={<DcsDirectory />} />
+                  <Route path="/dcs/:id"            element={<DcsDetail />} />
+                  <Route path="/manuals"            element={<Manuals />} />
+                  <Route path="/flow"               element={<ProcessFlow />} />
+                  <Route path="/smart-flow"         element={<SmartFlow />} />
+                  <Route path="/news"               element={<News />} />
+                  <Route path="/author"             element={<Author />} />
+                  <Route path="/auth"               element={<Auth />} />
+                  {/* OAuth + email-confirmation landing page */}
+                  <Route path="/auth/callback"      element={<AuthCallback />} />
+                  <Route path="/download"           element={<DownloadPage lang="en" />} />
+                  <Route path="*"                   element={<NotFound />} />
                 </Route>
               </Routes>
             </BrowserRouter>
