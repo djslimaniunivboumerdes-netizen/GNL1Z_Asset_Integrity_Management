@@ -10,6 +10,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
+  resendConfirmation: (email: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   // legacy aliases used by older code
   login: () => void;
@@ -18,19 +19,26 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Stable app URL: use VITE_APP_URL in production, fall back to current origin.
+// Set VITE_APP_URL=https://friendly-fix-up.pages.dev in Cloudflare Pages env vars.
+const appUrl = (): string =>
+  (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, "") ??
+  window.location.origin;
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser]       = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Subscribe FIRST so we never miss an event
+    // 1. Subscribe FIRST so we never miss a SIGNED_IN event from an OAuth callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
+      setLoading(false);        // ← also resolve loading on any auth state change
     });
 
-    // Then hydrate the existing session
+    // 2. Hydrate the existing session (covers page refresh, localStorage restore)
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
@@ -40,34 +48,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ── Email + password sign-in ──────────────────────────────────────────────
   const signIn: AuthContextType["signIn"] = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
     return { error };
   };
 
+  // ── Email sign-up ─────────────────────────────────────────────────────────
   const signUp: AuthContextType["signUp"] = async (email, password, fullName) => {
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
+        emailRedirectTo: `${appUrl()}/auth/callback`,
         data: fullName ? { full_name: fullName } : undefined,
       },
     });
     return { error };
   };
 
-  // src/contexts/AuthContext.tsx
-const signInWithGoogle: AuthContextType["signInWithGoogle"] = async () => {
-  // Always redirect back to the canonical origin, not a preview URL
-  const redirectTo = import.meta.env.VITE_APP_URL ?? window.location.origin;
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: `${redirectTo}/` },
-  });
-  return { error };
-};
+  // ── Google OAuth ──────────────────────────────────────────────────────────
+  // Redirects to /auth/callback so we can show a proper loading screen and
+  // welcome toast instead of landing silently on the dashboard.
+  const signInWithGoogle: AuthContextType["signInWithGoogle"] = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${appUrl()}/auth/callback`,
+        queryParams: { access_type: "offline", prompt: "select_account" },
+      },
+    });
+    return { error };
+  };
 
+  // ── Resend confirmation email ─────────────────────────────────────────────
+  const resendConfirmation: AuthContextType["resendConfirmation"] = async (email) => {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: { emailRedirectTo: `${appUrl()}/auth/callback` },
+    });
+    return { error };
+  };
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -81,6 +108,7 @@ const signInWithGoogle: AuthContextType["signInWithGoogle"] = async () => {
         signIn,
         signUp,
         signInWithGoogle,
+        resendConfirmation,
         signOut,
         login: () => {},
         logout: signOut,
