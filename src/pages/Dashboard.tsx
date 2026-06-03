@@ -107,9 +107,9 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Layer 2: Left-To-Right Precision Masking Gradient (Keeps right side completely crisp) */}
-        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/75 to-transparent z-10 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-50 z-10 pointer-events-none" />
+        {/* Layer 2: Scrim — left text area readable, image visible everywhere */}
+        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/85 via-zinc-950/20 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/70 via-transparent to-transparent z-10 pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-1 stripe-warning z-20" />
 
         {/* Layer 3: Interactive Typography Content */}
