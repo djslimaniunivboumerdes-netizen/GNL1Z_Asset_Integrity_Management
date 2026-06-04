@@ -1,0 +1,27 @@
+name: Deploy Supabase Function
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/functions/search-manual/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy search-manual Function
+        run: |
+          supabase functions deploy search-manual \
+            --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} \
+            --access-token ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
