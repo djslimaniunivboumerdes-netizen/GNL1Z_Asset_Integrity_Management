@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/I18nContext";
 import { MANUALS, driveDocViewUrl } from "@/data/manuals";
-import { supabase } from "@/integrations/supabase/client";
 
 const categoryColors: Record<string, string> = {
   Process:       "border-accent/40 text-accent",
@@ -136,15 +135,23 @@ export default function Manuals() {
     setDocResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("search-manual", {
-        body: {
+      const res = await fetch("/api/search-manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           query: term,
-          manuals: MANUALS.map(m => ({ id: m.id, title: lang === "en" ? m.title_en : m.title_fr, driveId: m.drive_id })),
-        },
+          manuals: MANUALS.map(m => ({
+            id: m.id,
+            title: lang === "en" ? m.title_en : m.title_fr,
+            driveId: m.drive_id,
+          })),
+        }),
+        signal: abortRef.current?.signal,
       });
 
-      if (error) throw new Error(error.message);
-      setDocResults((data as { results: DocHit[] }).results ?? []);
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json() as { results: DocHit[] };
+      setDocResults(data.results ?? []);
     } catch (err: unknown) {
       if ((err as Error).name !== "AbortError") {
         setDocError((err as Error).message ?? "Search failed");
@@ -296,8 +303,9 @@ export default function Manuals() {
                 <p className="font-semibold text-destructive mb-1">Search failed</p>
                 <p className="text-muted-foreground text-xs">{docError}</p>
                 <p className="text-muted-foreground text-xs mt-1">
-                  Make sure the <code className="font-mono bg-muted px-1 rounded">search-manual</code> Edge Function is deployed:{" "}
-                  <code className="font-mono bg-muted px-1 rounded">supabase functions deploy search-manual</code>
+                  The search API runs as a Cloudflare Pages Function
+                  (<code className="font-mono bg-muted px-1 rounded">functions/api/search-manual.ts</code>).
+                  Make sure the file is committed and pushed — Cloudflare deploys it automatically.
                 </p>
               </div>
             </div>
@@ -338,4 +346,4 @@ export default function Manuals() {
       )}
     </div>
   );
-}
+      }
