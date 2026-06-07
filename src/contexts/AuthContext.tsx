@@ -20,7 +20,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Stable app URL: use VITE_APP_URL in production, fall back to current origin.
-// Set VITE_APP_URL=https://friendly-fix-up.pages.dev in Cloudflare Pages env vars.
+// Set VITE_APP_URL=https://gnl1z.pages.dev in Cloudflare Pages env vars.
 const appUrl = (): string =>
   (import.meta.env.VITE_APP_URL as string | undefined)?.replace(/\/$/, "") ??
   window.location.origin;
