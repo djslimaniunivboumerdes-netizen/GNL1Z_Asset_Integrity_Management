@@ -35,7 +35,6 @@ export async function onRequestPost(ctx: { request: Request }): Promise<Response
     return Response.json({ results: [] }, { headers: CORS });
   }
 
-  // Search all manuals concurrently; each has a 14-second deadline
   const settled = await Promise.allSettled(
     manuals.map(m =>
       race(searchManual(m, query), 14_000, { ...m, count: 0, snippets: [] })
@@ -57,7 +56,7 @@ async function searchManual(m: ManualMeta, query: string): Promise<SearchHit> {
   return { ...m, count: snippets.length, snippets };
 }
 
-// ── Fetch a Google Drive file and extract plain text ──────────────────────────
+// ── Fetch + extract ───────────────────────────────────────────────────────────
 async function fetchDocxAsText(driveId: string): Promise<string> {
   const buf = await downloadFromDrive(driveId);
   return extractDocxText(buf);
@@ -70,7 +69,6 @@ async function downloadFromDrive(driveId: string): Promise<ArrayBuffer> {
   let res = await fetch(url, { redirect: "follow", headers: hdrs });
   if (!res.ok) throw new Error(`Drive ${res.status}`);
 
-  // Large files trigger a scan-warning HTML page — retry with &confirm=t
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("text/html")) {
     res = await fetch(`${url}&confirm=t`, { redirect: "follow", headers: hdrs });
@@ -80,29 +78,55 @@ async function downloadFromDrive(driveId: string): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
-// ── Parse .docx (ZIP) and return plain text using only Web APIs ───────────────
+// ── Parse .docx ───────────────────────────────────────────────────────────────
+//
+// THE KEY FIX:
+// Word splits a single word/tag across multiple <w:t> runs for formatting
+// (bold, colour change, hyperlink anchor, etc.).
+//
+// Old code:   parts.join(" ")
+//   → "E-501" split as ["E-","501"] becomes "E- 501"
+//   → indexOf("501") on "E- 501" returns -1 ← BUG
+//
+// New code: concatenate runs WITHIN a paragraph without any separator.
+// Spaces are only added BETWEEN paragraphs.
+//   → "E-501" split any way still becomes "E-501" ✓
+//   → "501" / "E501" / "E-501" all find it ✓
+//
 async function extractDocxText(buffer: ArrayBuffer): Promise<string> {
   const xml = await unzipEntry(buffer, "word/document.xml");
   if (!xml) return "";
 
-  // Pull text from <w:t> elements (Word text runs)
-  const parts: string[] = [];
-  const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) {
-    if (m[1]) parts.push(m[1]);
+  const paragraphs: string[] = [];
+
+  // Iterate over every paragraph block <w:p>…</w:p>
+  const paraRe = /<w:p[\s>][\s\S]*?<\/w:p>/g;
+  let para: RegExpExecArray | null;
+
+  while ((para = paraRe.exec(xml)) !== null) {
+    // Concatenate every <w:t> run inside this paragraph — NO added spaces
+    const runRe = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+    let   run:   RegExpExecArray | null;
+    let   paraText = "";
+
+    while ((run = runRe.exec(para[0])) !== null) {
+      paraText += run[1];          // direct concat → "E-501" stays "E-501"
+    }
+
+    const trimmed = paraText.trim();
+    if (trimmed) paragraphs.push(trimmed);
   }
-  return parts.join(" ").replace(/\s{2,}/g, " ").trim();
+
+  return paragraphs.join(" ").replace(/\s{2,}/g, " ").trim();
 }
 
-// ── Minimal ZIP reader (Web APIs only — no npm) ───────────────────────────────
+// ── Minimal ZIP reader (Web APIs only) ───────────────────────────────────────
 async function unzipEntry(buffer: ArrayBuffer, target: string): Promise<string | null> {
   const bytes = new Uint8Array(buffer);
   const view  = new DataView(buffer);
   let   pos   = 0;
 
   while (pos + 30 < bytes.length) {
-    // Local File Header signature: PK\x03\x04
     if (view.getUint32(pos, true) !== 0x04034b50) { pos++; continue; }
 
     const method    = view.getUint16(pos + 8,  true);
@@ -115,20 +139,16 @@ async function unzipEntry(buffer: ArrayBuffer, target: string): Promise<string |
 
     if (name === target) {
       const chunk = bytes.subarray(dataStart, dataEnd);
-      if (method === 0) {
-        return new TextDecoder().decode(chunk);           // stored
-      }
-      if (method === 8) {
-        return inflate(chunk);                            // DEFLATE
-      }
-      return null;                                        // unsupported
+      if (method === 0) return new TextDecoder().decode(chunk);
+      if (method === 8) return inflate(chunk);
+      return null;
     }
     pos = dataEnd;
   }
   return null;
 }
 
-// ── DEFLATE decompression via DecompressionStream ─────────────────────────────
+// ── DEFLATE ───────────────────────────────────────────────────────────────────
 async function inflate(data: Uint8Array): Promise<string> {
   const ds     = new DecompressionStream("deflate-raw");
   const writer = ds.writable.getWriter();
@@ -148,26 +168,69 @@ async function inflate(data: Uint8Array): Promise<string> {
   const merged = new Uint8Array(total);
   let   off    = 0;
   for (const c of chunks) { merged.set(c, off); off += c.length; }
-
   return new TextDecoder().decode(merged);
 }
 
-// ── Find context snippets around each occurrence ──────────────────────────────
-function findSnippets(text: string, query: string, ctx = 180, max = 5): string[] {
-  const lc   = text.toLowerCase();
-  const lcQ  = query.toLowerCase();
-  const out: string[] = [];
-  let   pos  = 0;
+// ── Query variants ────────────────────────────────────────────────────────────
+//
+// Generates every reasonable form of an equipment tag so "501", "E501",
+// "E-501" and "E 501" all find the same equipment.
+//
+//  "501"   → ["501"]                       (plain number always works as substring)
+//  "E501"  → ["E501",  "E-501", "E 501"]
+//  "E-501" → ["E-501", "E501", "E 501"]
+//  "E 501" → ["E 501", "E501", "E-501"]
+//
+function queryVariants(raw: string): string[] {
+  const q    = raw.trim();
+  // Strip all separators → bare alphanumeric string
+  const bare = q.replace(/[-\s_]+/g, "");
+  // Insert dash at every letter↔digit and digit↔letter boundary
+  const dashed = bare
+    .replace(/([A-Za-z])(\d)/g, "$1-$2")
+    .replace(/(\d)([A-Za-z])/g, "$1-$2");
+  // Insert space at those same boundaries
+  const spaced = bare
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2");
 
-  while (out.length < max) {
-    const idx = lc.indexOf(lcQ, pos);
-    if (idx === -1) break;
-    const s = Math.max(0, idx - ctx);
-    const e = Math.min(text.length, idx + query.length + ctx);
-    out.push((s > 0 ? "…" : "") + text.slice(s, e) + (e < text.length ? "…" : ""));
-    pos = idx + query.length;
+  // Deduplicate while keeping insertion order
+  const seen = new Set<string>();
+  return [q, bare, dashed, spaced].filter(v => {
+    if (!v || seen.has(v)) return false;
+    seen.add(v);
+    return true;
+  });
+}
+
+// ── Find snippets — tries every query variant ─────────────────────────────────
+function findSnippets(text: string, query: string, ctx = 200, max = 5): string[] {
+  const snips:   string[] = [];
+  const usedPos  = new Set<number>(); // avoid duplicate snippets
+
+  for (const variant of queryVariants(query)) {
+    const lc  = text.toLowerCase();
+    const lcV = variant.toLowerCase();
+    let   pos = 0;
+
+    while (snips.length < max) {
+      const idx = lc.indexOf(lcV, pos);
+      if (idx === -1) break;
+
+      if (!usedPos.has(idx)) {
+        usedPos.add(idx);
+        const s = Math.max(0, idx - ctx);
+        const e = Math.min(text.length, idx + variant.length + ctx);
+        snips.push((s > 0 ? "…" : "") + text.slice(s, e) + (e < text.length ? "…" : ""));
+      }
+
+      pos = idx + Math.max(1, variant.length);
+    }
+
+    if (snips.length >= max) break;
   }
-  return out;
+
+  return snips;
 }
 
 // ── Timeout race ──────────────────────────────────────────────────────────────
@@ -176,4 +239,4 @@ function race<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
     promise,
     new Promise<T>(res => setTimeout(() => res(fallback), ms)),
   ]);
-    }
+}
