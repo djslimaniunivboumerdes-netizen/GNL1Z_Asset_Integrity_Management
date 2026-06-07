@@ -5,10 +5,11 @@ import {
   Shield, Zap, RefreshCw, ChevronDown, ChevronUp,
 } from "lucide-react";
 
-const GITHUB_REPO = "djslimaniunivboumerdes-netizen/gnl1z";
-const WEBAPP_URL  = "https://gnl1z-sonatrach.YOUR-SUBDOMAIN.workers.dev";
+const GITHUB_REPO = "djslimaniunivboumerdes-netizen/GNL1Z_Asset_Integrity_Management";
+const WEBAPP_URL  = "https://gnl1z.pages.dev";
 const TESTFLIGHT  = "";
-const APK_SHA256  = "08aea7d0f1e9fdd4086d5a159b8c9e1d0d2457a6c7219327d4bc6a6c6a2a797c";
+// Checksums are fetched live from the release's SHA256SUMS.txt
+const APK_SHA256  = "";  // populated at runtime from release asset
 
 interface Asset { name: string; browser_download_url: string; size: number; }
 interface Release { tag_name: string; published_at: string; assets: Asset[]; }
@@ -161,13 +162,31 @@ export default function DownloadPage({ lang = "en" }: { lang?: "en" | "fr" }) {
   const [release,  setRelease]  = useState<Release | null>(null);
   const [loading,  setLoading]  = useState(true);
   const [showHash, setShowHash] = useState(false);
+  const [checksums, setChecksums] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
       .then(r => r.json())
-      .then((d: unknown) => { 
+      .then((d: unknown) => {
         const data = d as unknown as Record<string, unknown>;
-        if (data.tag_name) setRelease(d as unknown as Release); 
+        if (data.tag_name) {
+          setRelease(d as unknown as Release);
+          // Fetch the SHA256SUMS.txt asset if present
+          const sumsAsset = (data.assets as Asset[]).find((a: Asset) => a.name === "SHA256SUMS.txt");
+          if (sumsAsset) {
+            fetch(sumsAsset.browser_download_url)
+              .then(r => r.text())
+              .then(txt => {
+                const map: Record<string, string> = {};
+                txt.trim().split("\n").forEach(line => {
+                  const [hash, name] = line.split(/\s+/);
+                  if (hash && name) map[name.replace("*", "").trim()] = hash;
+                });
+                setChecksums(map);
+              })
+              .catch(() => {});
+          }
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -255,12 +274,22 @@ export default function DownloadPage({ lang = "en" }: { lang?: "en" | "fr" }) {
             </button>
           </div>
           {showHash && (
-            <div className="mt-3 rounded-lg bg-muted p-3 space-y-1">
-              <p className="text-xs font-mono text-muted-foreground break-all">APK SHA-256: {APK_SHA256}</p>
-              <p className="text-xs font-mono text-muted-foreground/50">
+            <div className="mt-3 rounded-lg bg-muted p-3 space-y-2">
+              {Object.keys(checksums).length > 0 ? (
+                Object.entries(checksums).map(([name, hash]) => (
+                  <p key={name} className="text-xs font-mono text-muted-foreground break-all">
+                    <span className="text-foreground">{name}:</span><br />{hash}
+                  </p>
+                ))
+              ) : (
+                <p className="text-xs font-mono text-muted-foreground break-all">
+                  {APK_SHA256 || (lang === "fr" ? "Publiez une release pour voir les checksums." : "Publish a release to see checksums.")}
+                </p>
+              )}
+              <p className="text-xs font-mono text-muted-foreground/50 pt-1">
                 {lang === "fr"
-                  ? "Vérifier avec: sha256sum GNL1Z-Android.apk"
-                  : "Verify with: sha256sum GNL1Z-Android.apk"}
+                  ? "Vérifier avec: sha256sum -c SHA256SUMS.txt"
+                  : "Verify with: sha256sum -c SHA256SUMS.txt"}
               </p>
             </div>
           )}
