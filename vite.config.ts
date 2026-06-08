@@ -16,21 +16,22 @@ export default defineConfig({
     },
   },
 
-  plugins: [
+plugins: [
     react(),
 
     VitePWA({
-    VitePWA({
-  registerType: "autoUpdate",
-  injectRegister: "auto",
+      registerType: "autoUpdate",
+      injectRegister: "auto",
 
-  includeAssets: [
-    "favicon.ico",
-    "favicon-32x32.png",
-    "apple-touch-icon.png",
-    "icon-192x192.png",
-    "icon-512x512.png",
-  ],
+      includeAssets: [
+        "favicon.ico",
+        "favicon-32x32.png",
+        "apple-touch-icon.png",
+        "icon-192x192.png",
+        "icon-512x512.png",
+      ],
+      
+      // ... everything else below remains the same
 
   manifest: {
     filename: 'manifest.json',   // ← ADD THIS — matches <link rel="manifest"> in index.html
