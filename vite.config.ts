@@ -34,23 +34,23 @@ plugins: [
       // ... everything else below remains the same
 
   manifest: {
-    filename: 'manifest.json',   // ← ADD THIS — matches <link rel="manifest"> in index.html
-    id: '/',                      // ← ADD THIS — required by PWABuilder for APK
-    name: "GNL1Z Asset Integrity Management",
-    short_name: "GNL1Z",
-    description: "Industrial Asset Management for the GNL1Z Sonatrach AP-C3MR™ liquefaction facility. Equipment master, spare parts, DCS directory, and operational manuals.",
-    theme_color: "#0f172a",
-    background_color: "#ffffff",
-    display: "standalone",
-    orientation: "portrait",
-    start_url: "/",
-    scope: "/",
-    icons: [
-      { src: "icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { src: "icon-512x512.png", sizes: "512x512", type: "image/png" },
-      { src: "icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
-    ]
-  },
+  filename: 'manifest.json',        // ← add this line
+  id: '/',                          // ← add this line
+  name: "GNL1Z Asset Integrity Management",
+  short_name: "GNL1Z",
+  description: "Industrial Asset Management for the GNL1Z Sonatrach AP-C3MR™ liquefaction facility.",
+  theme_color: "#0f172a",
+  background_color: "#ffffff",
+  display: "standalone",
+  orientation: "portrait",
+  start_url: "/",
+  scope: "/",
+  icons: [
+    { src: "icon-192x192.png", sizes: "192x192", type: "image/png" },
+    { src: "icon-512x512.png", sizes: "512x512", type: "image/png" },
+    { src: "icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+  ]
+},
   // ... rest of workbox config unchanged
 
       workbox: {
