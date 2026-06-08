@@ -1,25 +1,74 @@
-// GNL1Z kill-switch service worker.
-// Replaces the previous cache-first SW which caused stale-build issues.
-// On activation: clears all caches, navigates open clients to a fresh URL,
-// then unregisters itself. Keep this file in place for at least one
-// release cycle so previously-installed clients get cleaned up.
-self.addEventListener('install', (e) => e.waitUntil(self.skipWaiting()));
-self.addEventListener('activate', (e) =>
-  e.waitUntil(
-    (async () => {
-      await self.clients.claim();
-      const names = await caches.keys();
-      await Promise.all(names.map((n) => caches.delete(n)));
-      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      await Promise.all(
-        clients.map((c) => {
-          const url = new URL(c.url);
-          url.searchParams.set('sw-cleanup', Date.now().toString());
-          return c.navigate(url.toString()).catch(() => {});
+const CACHE_NAME = 'gnl1z-v1';
+
+// Core structural assets to precache for offline support
+const PRECACHE_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
+  '/apple-touch-icon.png'
+];
+
+// Install Event: Precaches core shell assets
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+// Activate Event: Cleans up any stale legacy caches left by previous versions
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            console.log('Clearing legacy cache:', cache);
+            return caches.delete(cache);
+          }
         })
       );
-      await self.registration.unregister();
-    })()
-  )
-);
-// No fetch handler — requests pass through to the network.
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Fetch Event: Store validation engines STRICTLY require this.
+// Uses a Network-First strategy for core logic, falling back to cache if offline.
+self.addEventListener('fetch', (event) => {
+  // Only handle GET requests (skip mutations, Supabase API calls, etc.)
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+
+  // Network-First strategy with Cache Fallback
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        // If valid response, clone it and save/update it in our cache
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        // If network fails (Offline mode), try pulling from local cache
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // If a major application route fails offline, return the main index.html shell
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+        });
+      })
+  );
+});
