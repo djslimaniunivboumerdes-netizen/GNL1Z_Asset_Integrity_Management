@@ -3,8 +3,6 @@ import react from "@vitejs/plugin-react-swc";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
-// Electron loads assets via file:// — needs relative base.
-// Cloudflare Pages / Web build serves from /
 const isElectron = process.env.BUILD_TARGET === "electron";
 
 export default defineConfig({
@@ -26,38 +24,42 @@ export default defineConfig({
 
       includeAssets: [
         "favicon.ico",
+        "favicon-32x32.png",
         "apple-touch-icon.png",
         "icon-192x192.png",
         "icon-512x512.png",
-        "favicon-32x32.png",
       ],
 
       manifest: false,
 
       workbox: {
+        // Fix build failures from large images
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
 
+        // Only precache core app files
         globPatterns: [
-          "**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff,woff2}"
+          "**/*.{js,css,html,ico,woff,woff2}"
         ],
 
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|webp)$/i,
+            urlPattern: /\.(png|jpg|jpeg|svg|webp)$/i,
             handler: "CacheFirst",
             options: {
               cacheName: "images-cache",
               expiration: {
-                maxEntries: 300,
+                maxEntries: 500,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },
           },
 
           {
-            urlPattern: /^https:\/\/.*\.pdf$/i,
+            urlPattern: /\.pdf$/i,
             handler: "CacheFirst",
             options: {
               cacheName: "pdf-cache",
