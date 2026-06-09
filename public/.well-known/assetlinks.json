@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "dev.pages.gl1z_manager.twa",
+        "sha256_cert_fingerprints": ["A8:06:95:7D:39:49:DC:8D:CA:F9:58:EB:EE:B9:BB:20:A3:86:A1:2F:AE:B5:82:76:4D:2B:31:FF:C6:1A:95:E2"]
+      }
+    }]
