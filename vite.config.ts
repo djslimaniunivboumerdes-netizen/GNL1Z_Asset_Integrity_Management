@@ -22,6 +22,7 @@ plugins: [
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
+      manifest: false,
 
       includeAssets: [
         "favicon.ico",
