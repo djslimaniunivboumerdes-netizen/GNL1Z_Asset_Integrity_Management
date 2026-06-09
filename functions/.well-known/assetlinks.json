@@ -1,0 +1,17 @@
+export async function onRequest(context) {
+  const assetlinks = [{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "dev.pages.gl1z_manager.twa",
+    "sha256_cert_fingerprints": ["YOUR_SHA256_FINGERPRINT_HERE"]
+  }
+}];
+
+  return new Response(JSON.stringify(assetlinks), {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "Cache-Control": "max-age=86400"
+    }
+  });
+}
