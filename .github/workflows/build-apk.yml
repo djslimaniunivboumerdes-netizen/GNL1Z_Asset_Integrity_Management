@@ -43,6 +43,17 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Setup icon source from existing PWA icon
+        run: |
+          mkdir -p resources
+          cp public/icon-512x512.png resources/icon.png
+
+      - name: Install Capacitor Assets generator
+        run: npm install @capacitor/assets --save-dev
+
+      - name: Generate all Android icon sizes
+        run: npx capacitor-assets generate --android
+
       - name: Sync web build to Android
         run: npx cap sync android
 
