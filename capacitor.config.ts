@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.sonatrach.gnl1z",
-  appName: "GNL1Z",
+  appName: "GNL1Z-MANAGER",
   webDir: "dist",
   server: {
     androidScheme: "https",
