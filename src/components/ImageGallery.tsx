@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Image as ImageIcon, X } from "lucide-react";
+import { Image as ImageIcon, X, Save, NotebookPen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PhotoUpload } from "./PhotoUpload";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/hooks/use-toast";
 
 interface ImageRow {
   id: string;
@@ -14,6 +17,9 @@ const BUCKET = "equipment-photos";
 export function ImageGallery({ tag }: { tag: string }) {
   const [imgs, setImgs] = useState<ImageRow[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesLoaded, setNotesLoaded] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -24,7 +30,33 @@ export function ImageGallery({ tag }: { tag: string }) {
     setImgs((data as unknown as ImageRow[]) ?? []);
   }, [tag]);
 
-  useEffect(() => { void load(); }, [load]);
+  const loadNotes = useCallback(async () => {
+    const { data } = await supabase
+      .from("equipment_notes" as never)
+      .select("notes")
+      .eq("tag", tag)
+      .maybeSingle();
+    const row = data as unknown as { notes: string | null } | null;
+    setNotes(row?.notes ?? "");
+    setNotesLoaded(true);
+  }, [tag]);
+
+  useEffect(() => { void load(); void loadNotes(); }, [load, loadNotes]);
+
+  const saveNotes = async () => {
+    setSavingNotes(true);
+    const { error } = await supabase.from("equipment_notes" as never).upsert({
+      tag,
+      notes,
+      updated_at: new Date().toISOString(),
+    } as never);
+    setSavingNotes(false);
+    if (error) {
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Notes saved" });
+    }
+  };
 
   const urlOf = (path: string) =>
     supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
@@ -54,6 +86,26 @@ export function ImageGallery({ tag }: { tag: string }) {
           ))}
         </div>
       )}
+
+      {/* Notes section */}
+      <div className="mt-5 pt-5 border-t border-border">
+        <div className="flex items-center gap-2 mb-3">
+          <NotebookPen className="h-4 w-4 text-accent" />
+          <h4 className="font-display font-semibold text-sm">Field notes / Notes de terrain</h4>
+          {!notesLoaded && <span className="text-xs text-muted-foreground ml-1">...</span>}
+        </div>
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add observations, anomalies, or remarks about this equipment..."
+          className="min-h-[100px] resize-y"
+        />
+        <div className="mt-3 flex justify-end">
+          <Button onClick={saveNotes} disabled={savingNotes} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2">
+            <Save className="h-4 w-4" /> {savingNotes ? "..." : "Save notes"}
+          </Button>
+        </div>
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setOpen(null)}>
