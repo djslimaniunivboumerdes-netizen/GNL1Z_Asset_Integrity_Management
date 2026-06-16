@@ -43,6 +43,43 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Add camera permissions to manifest
+        run: |
+          sed -i '/<manifest /a\    <uses-permission android:name="android.permission.CAMERA" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest /a\    <uses-feature android:name="android.hardware.camera" android:required="false" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Patch MainActivity to grant WebView camera permission
+        run: |
+          cat > android/app/src/main/java/com/sonatrach/gnl1z/MainActivity.java << 'EOF'
+          package com.sonatrach.gnl1z;
+
+          import android.Manifest;
+          import android.content.pm.PackageManager;
+          import android.os.Bundle;
+          import android.webkit.PermissionRequest;
+          import androidx.core.app.ActivityCompat;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+            @Override
+            public void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+
+              if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                  != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 1001);
+              }
+
+              getBridge().getWebView().setWebChromeClient(new android.webkit.WebChromeClient() {
+                @Override
+                public void onPermissionRequest(final PermissionRequest request) {
+                  runOnUiThread(() -> request.grant(request.getResources()));
+                }
+              });
+            }
+          }
+          EOF
+
       - name: Setup icon source from existing PWA icon
         run: |
           mkdir -p resources
