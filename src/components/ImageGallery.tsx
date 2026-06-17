@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Image as ImageIcon, X, Save, NotebookPen } from "lucide-react";
+import { Image as ImageIcon, X, Save, NotebookPen, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PhotoUpload } from "./PhotoUpload";
 import { Button } from "@/components/ui/button";
@@ -22,37 +22,59 @@ export function ImageGallery({ tag }: { tag: string }) {
   const [notesLoaded, setNotesLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("equipment_images" as never)
+    const { data, error } = await supabase
+      .from("equipment_images")
       .select("id, file_path, file_name")
       .eq("tag", tag)
       .order("created_at", { ascending: false });
-    setImgs((data as unknown as ImageRow[]) ?? []);
+
+    if (error) {
+      console.error(error.message);
+      return;
+    }
+
+    setImgs((data as ImageRow[]) ?? []);
   }, [tag]);
 
   const loadNotes = useCallback(async () => {
-    const { data } = await supabase
-      .from("equipment_notes" as never)
+    const { data, error } = await supabase
+      .from("equipment_notes")
       .select("notes")
       .eq("tag", tag)
       .maybeSingle();
-    const row = data as unknown as { notes: string | null } | null;
+
+    if (error) {
+      console.error(error.message);
+      return;
+    }
+
+    const row = data as { notes: string | null } | null;
     setNotes(row?.notes ?? "");
     setNotesLoaded(true);
   }, [tag]);
 
-  useEffect(() => { void load(); void loadNotes(); }, [load, loadNotes]);
+  useEffect(() => {
+    void load();
+    void loadNotes();
+  }, [load, loadNotes]);
 
   const saveNotes = async () => {
     setSavingNotes(true);
-    const { error } = await supabase.from("equipment_notes" as never).upsert({
+
+    const { error } = await supabase.from("equipment_notes").upsert({
       tag,
       notes,
       updated_at: new Date().toISOString(),
-    } as never);
+    });
+
     setSavingNotes(false);
+
     if (error) {
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+      toast({
+        title: "Save failed",
+        description: error.message,
+        variant: "destructive",
+      });
     } else {
       toast({ title: "Notes saved" });
     }
@@ -61,14 +83,51 @@ export function ImageGallery({ tag }: { tag: string }) {
   const urlOf = (path: string) =>
     supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 
+  const deleteImage = async (image: ImageRow) => {
+    if (!confirm("Delete this image?")) return;
+
+    try {
+      // 1. delete from storage
+      const { error: storageError } = await supabase.storage
+        .from(BUCKET)
+        .remove([image.file_path]);
+
+      if (storageError) throw storageError;
+
+      // 2. delete from database
+      const { error: dbError } = await supabase
+        .from("equipment_images")
+        .delete()
+        .eq("id", image.id);
+
+      if (dbError) throw dbError;
+
+      // 3. reload
+      await load();
+
+      toast({ title: "Image deleted" });
+    } catch (err: any) {
+      toast({
+        title: "Delete failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="border border-border rounded-lg bg-card p-5">
+
+      {/* HEADER */}
       <div className="flex items-center gap-2 mb-4">
         <ImageIcon className="h-4 w-4 text-accent" />
         <h3 className="font-display font-semibold">Photos & diagrams</h3>
-        <div className="ml-auto"><PhotoUpload tag={tag} onUploaded={load} /></div>
+        <div className="ml-auto">
+          <PhotoUpload tag={tag} onUploaded={load} />
+        </div>
       </div>
 
+      {/* IMAGE GRID */}
       {imgs.length === 0 ? (
         <div className="text-sm text-muted-foreground text-center py-6 border border-dashed border-border rounded">
           No photos yet — upload one from your phone camera.
@@ -76,41 +135,85 @@ export function ImageGallery({ tag }: { tag: string }) {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
           {imgs.map((i) => (
-            <button
-              key={i.id}
-              onClick={() => setOpen(urlOf(i.file_path))}
-              className="aspect-square rounded overflow-hidden border border-border bg-secondary hover:ring-2 hover:ring-accent transition"
-            >
-              <img src={urlOf(i.file_path)} alt={i.file_name ?? ""} className="w-full h-full object-cover" loading="lazy" />
-            </button>
+            <div key={i.id} className="relative group">
+
+              {/* IMAGE */}
+              <button
+                onClick={() => setOpen(urlOf(i.file_path))}
+                className="aspect-square rounded overflow-hidden border border-border bg-secondary hover:ring-2 hover:ring-accent transition w-full"
+              >
+                <img
+                  src={urlOf(i.file_path)}
+                  alt={i.file_name ?? ""}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </button>
+
+              {/* DELETE BUTTON */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteImage(i);
+                }}
+                className="absolute top-1 right-1 bg-black/60 text-white rounded p-1 opacity-0 group-hover:opacity-100 transition"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Notes section */}
+      {/* NOTES */}
       <div className="mt-5 pt-5 border-t border-border">
         <div className="flex items-center gap-2 mb-3">
           <NotebookPen className="h-4 w-4 text-accent" />
-          <h4 className="font-display font-semibold text-sm">Field notes / Notes de terrain</h4>
-          {!notesLoaded && <span className="text-xs text-muted-foreground ml-1">...</span>}
+          <h4 className="font-display font-semibold text-sm">
+            Field notes / Notes de terrain
+          </h4>
+          {!notesLoaded && (
+            <span className="text-xs text-muted-foreground ml-1">...</span>
+          )}
         </div>
+
         <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Add observations, anomalies, or remarks about this equipment..."
           className="min-h-[100px] resize-y"
         />
+
         <div className="mt-3 flex justify-end">
-          <Button onClick={saveNotes} disabled={savingNotes} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2">
-            <Save className="h-4 w-4" /> {savingNotes ? "..." : "Save notes"}
+          <Button
+            onClick={saveNotes}
+            disabled={savingNotes}
+            className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
+          >
+            <Save className="h-4 w-4" />
+            {savingNotes ? "..." : "Save notes"}
           </Button>
         </div>
       </div>
 
+      {/* FULLSCREEN VIEW */}
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setOpen(null)}>
-          <button className="absolute top-4 right-4 text-white" onClick={() => setOpen(null)}><X className="h-6 w-6" /></button>
-          <img src={open} alt="" className="max-w-full max-h-full object-contain" />
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setOpen(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white"
+            onClick={() => setOpen(null)}
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          <img
+            src={open}
+            alt=""
+            className="max-w-full max-h-full object-contain"
+          />
         </div>
       )}
     </div>
