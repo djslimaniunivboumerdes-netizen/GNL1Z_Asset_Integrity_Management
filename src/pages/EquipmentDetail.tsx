@@ -23,6 +23,7 @@ import { ImageGallery } from "@/components/ImageGallery";
 import { MaintenanceTimeline } from "@/components/MaintenanceTimeline";
 import NotFound from "./NotFound";
 
+const TRAINS = ["T100", "T200", "T300", "T400", "T500", "T600"];
 
 export default function EquipmentDetail() {
   const { tag = "" } = useParams();
@@ -33,6 +34,7 @@ export default function EquipmentDetail() {
   const [qrOpen, setQrOpen] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
   const [newNote, setNewNote] = useState("");
+  const [train, setTrain] = useState("T100");
   const [savingNote, setSavingNote] = useState(false);
 
   if (!eq) return <NotFound />;
@@ -45,10 +47,9 @@ export default function EquipmentDetail() {
   const insulation = insulationRecommendation(eq.type.code, eq.technical.temperature_c);
   const crane = recommendCrane(eq.technical.weight_kg);
 
-  // QR computed values (eq is guaranteed non-null here)
   const pageUrl = `${window.location.origin}/equipment/${encodeURIComponent(eq.tag)}`;
 
-  // ── Load multiple notes from Supabase ───────────────────────────────────
+  // ── Load notes from Supabase ────────────────────────────────────────────
   useEffect(() => {
     let active = true;
 
@@ -60,7 +61,7 @@ export default function EquipmentDetail() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Failed to load notes:", error.message);
+        console.error("Notes load error:", error.message);
       }
 
       if (active) setNotes(data ?? []);
@@ -71,7 +72,7 @@ export default function EquipmentDetail() {
     };
   }, [eq.tag]);
 
-  // ── Add note ────────────────────────────────────────────────────────────
+  // ── Add note ──────────────────────────────────────────────────────────
   const addNote = async () => {
     if (!newNote.trim()) return;
 
@@ -79,6 +80,7 @@ export default function EquipmentDetail() {
 
     const { error } = await supabase.from("equipment_notes").insert({
       tag: eq.tag,
+      train,
       note: newNote.trim(),
     });
 
@@ -105,7 +107,7 @@ export default function EquipmentDetail() {
     setNotes(data ?? []);
   };
 
-  // ── Delete note ─────────────────────────────────────────────────────────
+  // ── Delete note ───────────────────────────────────────────────────────
   const deleteNote = async (id: string) => {
     const { error } = await supabase
       .from("equipment_notes")
@@ -130,6 +132,7 @@ export default function EquipmentDetail() {
         <Link to="/equipment"><ArrowLeft className="h-4 w-4 mr-1" /> {t("back")}</Link>
       </Button>
 
+      {/* ── Hero Header ────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden border border-border rounded-lg bg-gradient-industrial p-6 md:p-8 mb-6 text-white">
         <div className="absolute top-0 right-0 w-72 h-72 bg-accent/10 rounded-full blur-3xl" />
         <div className="absolute top-0 left-0 right-0 h-1 stripe-warning" />
@@ -156,6 +159,7 @@ export default function EquipmentDetail() {
             </div>
           </div>
 
+          {/* QR panel */}
           {qrOpen && (
             <div className="mt-5 pt-5 border-t border-white/20 flex flex-col sm:flex-row items-start gap-5">
               <div className="bg-white rounded-xl p-2 shadow-lg shrink-0">
@@ -184,7 +188,7 @@ export default function EquipmentDetail() {
               </div>
             </div>
           )}
-          {/* REMOVED: old single eq.notes display */}
+          {/* OLD SINGLE NOTE REMOVED — was here: {eq.notes && <p>...</p>} */}
         </div>
       </div>
 
@@ -294,7 +298,7 @@ export default function EquipmentDetail() {
         </Button>
       </div>
 
-      {/* ── Multiple Notes Section (ONLY notes UI) ────────────────────────── */}
+      {/* ── Field Notes (Multi-Note + Train) ───────────────────────────────── */}
       <div className="mt-6 border border-border rounded-lg bg-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold">
@@ -302,12 +306,23 @@ export default function EquipmentDetail() {
           </h3>
         </div>
 
-        {/* input */}
-        <div className="flex gap-2 mb-4">
+        {/* Input row: Train selector + Note text + Save */}
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <select
+            value={train}
+            onChange={(e) => setTrain(e.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 shrink-0"
+          >
+            {TRAINS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+
           <Input
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
-            placeholder={lang === "en" ? "Add a new note..." : "Ajouter une note..."}
+            placeholder={lang === "en" ? "Add a note…" : "Ajouter une note…"}
+            className="flex-1"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -315,13 +330,14 @@ export default function EquipmentDetail() {
               }
             }}
           />
-          <Button onClick={addNote} disabled={savingNote || !newNote.trim()}>
+
+          <Button onClick={addNote} disabled={savingNote || !newNote.trim()} className="shrink-0">
             <Save className="h-4 w-4 mr-2" />
             {savingNote ? "…" : t("save") || "Save"}
           </Button>
         </div>
 
-        {/* list */}
+        {/* Notes list */}
         <div className="space-y-2">
           {notes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -333,11 +349,21 @@ export default function EquipmentDetail() {
                 key={n.id}
                 className="border border-border rounded p-3 flex justify-between items-start gap-3"
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="secondary" className="font-mono text-[10px]">
+                      {n.train || "T100"}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {n.created_at
+                        ? new Date(n.created_at).toLocaleString(
+                            lang === "en" ? "en-US" : "fr-FR",
+                            { dateStyle: "short", timeStyle: "short" }
+                          )
+                        : ""}
+                    </span>
+                  </div>
                   <p className="text-sm break-words">{n.note}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {n.created_at ? new Date(n.created_at).toLocaleString(lang === "en" ? "en-US" : "fr-FR") : ""}
-                  </p>
                 </div>
 
                 <Button
@@ -638,4 +664,4 @@ function ToolsTab({ boltSize, wrench, tools, liftingMethod, extraTools }: { bolt
       </div>
     </div>
   );
-    }
+                                }
