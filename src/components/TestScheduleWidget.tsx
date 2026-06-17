@@ -1,72 +1,150 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { differenceInDays, parseISO } from "date-fns";
-import { AlertTriangle, CalendarClock } from "lucide-react";
+import { CalendarClock, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { EQUIPMENT } from "@/data";
 
-interface DateRow { tag: string; next_test_due: string | null }
+interface DateRow {
+  tag: string;
+  next_test_due: string | null;
+}
+
+interface TrainRow {
+  tag: string;
+  train: string | null;
+}
+
+type ScheduleItem = {
+  tag: string;
+  next_test_due: string;
+  train?: string | null;
+  daysLeft: number;
+};
 
 export function TestScheduleWidget() {
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [dates, setDates] = useState<Record<string, string>>({});
+  const [trains, setTrains] = useState<Record<string, string>>({});
 
+  // ── Load test dates ─────────────────────────────
   useEffect(() => {
-    supabase.from("equipment_test_dates").select("tag, next_test_due").then(({ data }) => {
-      const m: Record<string, string> = {};
-      (data as DateRow[] | null)?.forEach((r) => { if (r.next_test_due) m[r.tag] = r.next_test_due; });
-      setOverrides(m);
-    });
+    supabase
+      .from("equipment_test_dates")
+      .select("tag, next_test_due")
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data as DateRow[] | null)?.forEach((r) => {
+          if (r.next_test_due) map[r.tag] = r.next_test_due;
+        });
+        setDates(map);
+      });
   }, []);
 
-  const buckets = useMemo(() => {
-    const today = new Date();
-    let overdue = 0, d30 = 0, d60 = 0, d90 = 0;
-    for (const eq of EQUIPMENT) {
-      const due = overrides[eq.tag] ?? eq.maintenance.next_test_due;
-      if (!due) continue;
-      let d: Date;
-      try { d = parseISO(due); } catch { continue; }
-      const diff = differenceInDays(d, today);
-      if (diff < 0) overdue++;
-      else if (diff <= 30) d30++;
-      else if (diff <= 60) d60++;
-      else if (diff <= 90) d90++;
-    }
-    return { overdue, d30, d60, d90 };
-  }, [overrides]);
+  // ── Load train info (from equipment table OR fallback) ─────────────
+  useEffect(() => {
+    supabase
+      .from("equipment")
+      .select("tag, train")
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data as TrainRow[] | null)?.forEach((r) => {
+          if (r.train) map[r.tag] = r.train;
+        });
+        setTrains(map);
+      });
+  }, []);
 
-  const cells = [
-    { label: "Overdue", value: buckets.overdue, tone: "destructive", icon: AlertTriangle },
-    { label: "Due ≤ 30d", value: buckets.d30, tone: "amber" },
-    { label: "Due ≤ 60d", value: buckets.d60, tone: "muted" },
-    { label: "Due ≤ 90d", value: buckets.d90, tone: "muted" },
-  ] as const;
+  // ── Build schedule list ─────────────────────────
+  const schedule = useMemo(() => {
+    const today = new Date();
+
+    const list: ScheduleItem[] = [];
+
+    for (const eq of EQUIPMENT) {
+      const dueStr = dates[eq.tag] ?? eq.maintenance.next_test_due;
+      if (!dueStr) continue;
+
+      let dueDate: Date;
+      try {
+        dueDate = parseISO(dueStr);
+      } catch {
+        continue;
+      }
+
+      list.push({
+        tag: eq.tag,
+        next_test_due: dueStr,
+        train: trains[eq.tag] ?? "—",
+        daysLeft: differenceInDays(dueDate, today),
+      });
+    }
+
+    return list.sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [dates, trains]);
 
   return (
     <section className="px-4 md:px-10 pb-2 max-w-7xl mx-auto">
-      <div className="flex items-center gap-2 mb-3">
+      {/* HEADER */}
+      <div className="flex items-center gap-2 mb-4">
         <CalendarClock className="h-4 w-4 text-accent" />
-        <h2 className="text-sm uppercase tracking-widest font-mono text-muted-foreground">Test schedule</h2>
+        <h2 className="text-sm uppercase tracking-widest font-mono text-muted-foreground">
+          Next Test Schedule
+        </h2>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {cells.map((c) => (
-          <Link
-            to="/equipment"
-            key={c.label}
-            className={`rounded-lg border p-4 transition hover:-translate-y-0.5 ${
-              c.tone === "destructive" ? "border-destructive/40 bg-destructive/5" :
-              c.tone === "amber" ? "border-amber-500/40 bg-amber-500/5" :
-              "border-border bg-card"
-            }`}
-          >
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">{c.label}</div>
-            <div className={`mt-1 text-3xl font-display font-bold ${
-              c.tone === "destructive" ? "text-destructive" :
-              c.tone === "amber" ? "text-amber-600 dark:text-amber-400" :
-              "text-foreground"
-            }`}>{c.value}</div>
-          </Link>
-        ))}
+
+      {/* LIST */}
+      <div className="space-y-2">
+        {schedule.length === 0 ? (
+          <div className="text-sm text-muted-foreground border border-dashed rounded p-6 text-center">
+            No scheduled tests found
+          </div>
+        ) : (
+          schedule.slice(0, 12).map((item) => (
+            <Link
+              key={item.tag}
+              to={`/equipment/${encodeURIComponent(item.tag)}`}
+              className="flex items-center justify-between border rounded-lg bg-card p-4 hover:bg-secondary/40 transition"
+            >
+              {/* LEFT */}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  {item.daysLeft < 0 && (
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                  )}
+                  <span className="font-mono font-semibold text-accent">
+                    {item.tag}
+                  </span>
+
+                  <span className="text-xs text-muted-foreground border px-2 py-0.5 rounded">
+                    {item.train}
+                  </span>
+                </div>
+
+                <div className="text-xs text-muted-foreground mt-1">
+                  Next test:{" "}
+                  {new Date(item.next_test_due).toLocaleDateString()}
+                </div>
+              </div>
+
+              {/* RIGHT */}
+              <div className="text-right">
+                <div
+                  className={`text-sm font-bold ${
+                    item.daysLeft < 0
+                      ? "text-red-500"
+                      : item.daysLeft <= 30
+                      ? "text-amber-500"
+                      : "text-foreground"
+                  }`}
+                >
+                  {item.daysLeft < 0
+                    ? `${Math.abs(item.daysLeft)}d overdue`
+                    : `${item.daysLeft}d left`}
+                </div>
+              </div>
+            </Link>
+          ))
+        )}
       </div>
     </section>
   );
