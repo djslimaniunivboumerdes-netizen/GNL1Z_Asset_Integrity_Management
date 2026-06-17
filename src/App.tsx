@@ -8,6 +8,7 @@ import { I18nProvider } from "@/contexts/I18nContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AppLayout from "@/components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
+import TestSchedule from "./pages/TestSchedule";
 import About from "./pages/About";
 import EquipmentList from "./pages/EquipmentList";
 import EquipmentDetail from "./pages/EquipmentDetail";
@@ -42,6 +43,7 @@ const App = () => (
                   <Route path="/equipment"          element={<EquipmentList />} />
                   <Route path="/equipment/:tag"     element={<EquipmentDetail />} />
                   <Route path="/equipment/:tag/log" element={<LogTest />} />
+                  <Route path="/test-schedule" element={<TestSchedule />} />
                   <Route path="/dcs"                element={<DcsDirectory />} />
                   <Route path="/dcs/:id"            element={<DcsDetail />} />
                   <Route path="/manuals"            element={<Manuals />} />
