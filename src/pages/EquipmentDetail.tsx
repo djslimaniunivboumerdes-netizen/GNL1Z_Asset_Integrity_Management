@@ -97,7 +97,6 @@ export default function EquipmentDetail() {
 
     setNewNote("");
 
-    // Refresh list
     const { data } = await supabase
       .from("equipment_notes")
       .select("*")
@@ -159,7 +158,6 @@ export default function EquipmentDetail() {
             </div>
           </div>
 
-          {/* QR panel */}
           {qrOpen && (
             <div className="mt-5 pt-5 border-t border-white/20 flex flex-col sm:flex-row items-start gap-5">
               <div className="bg-white rounded-xl p-2 shadow-lg shrink-0">
@@ -188,7 +186,6 @@ export default function EquipmentDetail() {
               </div>
             </div>
           )}
-          {/* OLD SINGLE NOTE REMOVED — was here: {eq.notes && <p>...</p>} */}
         </div>
       </div>
 
@@ -301,9 +298,7 @@ export default function EquipmentDetail() {
       {/* ── Field Notes (Multi-Note + Train) ───────────────────────────────── */}
       <div className="mt-6 border border-border rounded-lg bg-card p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display font-semibold">
-            {lang === "en" ? "Field Notes" : "Notes de terrain"}
-          </h3>
+          <h3 className="font-display font-semibold">Field Notes</h3>
         </div>
 
         {/* Input row: Train selector + Note text + Save */}
@@ -321,7 +316,7 @@ export default function EquipmentDetail() {
           <Input
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
-            placeholder={lang === "en" ? "Add a note…" : "Ajouter une note…"}
+            placeholder="Add a note…"
             className="flex-1"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -333,16 +328,14 @@ export default function EquipmentDetail() {
 
           <Button onClick={addNote} disabled={savingNote || !newNote.trim()} className="shrink-0">
             <Save className="h-4 w-4 mr-2" />
-            {savingNote ? "…" : t("save") || "Save"}
+            {savingNote ? "…" : "Save"}
           </Button>
         </div>
 
         {/* Notes list */}
         <div className="space-y-2">
           {notes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {lang === "en" ? "No notes yet." : "Aucune note pour le moment."}
-            </p>
+            <p className="text-sm text-muted-foreground">No notes yet.</p>
           ) : (
             notes.map((n) => (
               <div
@@ -356,10 +349,7 @@ export default function EquipmentDetail() {
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {n.created_at
-                        ? new Date(n.created_at).toLocaleString(
-                            lang === "en" ? "en-US" : "fr-FR",
-                            { dateStyle: "short", timeStyle: "short" }
-                          )
+                        ? new Date(n.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })
                         : ""}
                     </span>
                   </div>
@@ -664,4 +654,4 @@ function ToolsTab({ boltSize, wrench, tools, liftingMethod, extraTools }: { bolt
       </div>
     </div>
   );
-                                }
+          }
