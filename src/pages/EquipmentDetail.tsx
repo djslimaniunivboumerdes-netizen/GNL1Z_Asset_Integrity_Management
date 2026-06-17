@@ -53,11 +53,15 @@ export default function EquipmentDetail() {
     let active = true;
 
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("equipment_notes")
         .select("*")
         .eq("tag", eq.tag)
         .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to load notes:", error.message);
+      }
 
       if (active) setNotes(data ?? []);
     })();
@@ -91,6 +95,7 @@ export default function EquipmentDetail() {
 
     setNewNote("");
 
+    // Refresh list
     const { data } = await supabase
       .from("equipment_notes")
       .select("*")
@@ -116,7 +121,7 @@ export default function EquipmentDetail() {
       return;
     }
 
-    setNotes(notes.filter((n) => n.id !== id));
+    setNotes((prev) => prev.filter((n) => n.id !== id));
   };
 
   return (
@@ -134,7 +139,6 @@ export default function EquipmentDetail() {
               <div className="font-mono text-xs uppercase tracking-widest text-white/60 mb-2">{eq.type.name}</div>
               <div className="flex items-center gap-3">
                 <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight">{eq.tag}</h1>
-                {/* QR button inline next to tag */}
                 <button
                   onClick={() => setQrOpen(!qrOpen)}
                   title="QR Code"
@@ -151,7 +155,7 @@ export default function EquipmentDetail() {
               <Badge className="bg-accent text-accent-foreground font-mono">{eq.testing_status}</Badge>
             </div>
           </div>
-          {/* QR panel — slides open below the tag line */}
+
           {qrOpen && (
             <div className="mt-5 pt-5 border-t border-white/20 flex flex-col sm:flex-row items-start gap-5">
               <div className="bg-white rounded-xl p-2 shadow-lg shrink-0">
@@ -180,6 +184,7 @@ export default function EquipmentDetail() {
               </div>
             </div>
           )}
+          {/* REMOVED: old single eq.notes display */}
         </div>
       </div>
 
@@ -289,10 +294,12 @@ export default function EquipmentDetail() {
         </Button>
       </div>
 
-      {/* ── Multiple Notes Section ────────────────────────────────────────── */}
+      {/* ── Multiple Notes Section (ONLY notes UI) ────────────────────────── */}
       <div className="mt-6 border border-border rounded-lg bg-card p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display font-semibold">Field Notes</h3>
+          <h3 className="font-display font-semibold">
+            {lang === "en" ? "Field Notes" : "Notes de terrain"}
+          </h3>
         </div>
 
         {/* input */}
@@ -300,32 +307,45 @@ export default function EquipmentDetail() {
           <Input
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
-            placeholder="Add a new note..."
+            placeholder={lang === "en" ? "Add a new note..." : "Ajouter une note..."}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                addNote();
+              }
+            }}
           />
-          <Button onClick={addNote} disabled={savingNote}>
+          <Button onClick={addNote} disabled={savingNote || !newNote.trim()}>
             <Save className="h-4 w-4 mr-2" />
-            Save
+            {savingNote ? "…" : t("save") || "Save"}
           </Button>
         </div>
 
         {/* list */}
         <div className="space-y-2">
           {notes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No notes yet.</p>
+            <p className="text-sm text-muted-foreground">
+              {lang === "en" ? "No notes yet." : "Aucune note pour le moment."}
+            </p>
           ) : (
             notes.map((n) => (
               <div
                 key={n.id}
-                className="border border-border rounded p-3 flex justify-between"
+                className="border border-border rounded p-3 flex justify-between items-start gap-3"
               >
-                <div>
-                  <p className="text-sm">{n.note}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(n.created_at).toLocaleString()}
+                <div className="min-w-0">
+                  <p className="text-sm break-words">{n.note}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {n.created_at ? new Date(n.created_at).toLocaleString(lang === "en" ? "en-US" : "fr-FR") : ""}
                   </p>
                 </div>
 
-                <Button size="sm" variant="ghost" onClick={() => deleteNote(n.id)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => deleteNote(n.id)}
+                  className="shrink-0"
+                >
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -358,7 +378,6 @@ function TechInfoTab({ eq }: { eq: Equipment }) {
         {eq.technical.temperature_c != null && <Field label="Temp (°C)" value={eq.technical.temperature_c} mono />}
       </div>
 
-      {/* Test Pressure block */}
       <div className="border border-border rounded-lg bg-card p-5">
         <div className="flex items-center gap-2 mb-4">
           <Info className="h-4 w-4 text-accent" />
@@ -384,7 +403,7 @@ function TechInfoTab({ eq }: { eq: Equipment }) {
             : "Pressions d'épreuve calculées selon ASME VIII (1.43× pression de calcul × 1.3 hydrotest)."}
         </div>
       </div>
-            {/* Isolation Plan button */}
+
       <div className="border border-border rounded-lg bg-card p-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
@@ -404,7 +423,6 @@ function TechInfoTab({ eq }: { eq: Equipment }) {
         </div>
       </div>
 
-      {/* Editable test dates */}
       <TestDatesEditor tag={eq.tag} initialLast={eq.maintenance.last_tested} initialNext={eq.maintenance.next_test_due} />
     </>
   );
@@ -620,4 +638,4 @@ function ToolsTab({ boltSize, wrench, tools, liftingMethod, extraTools }: { bolt
       </div>
     </div>
   );
-                  }
+    }
