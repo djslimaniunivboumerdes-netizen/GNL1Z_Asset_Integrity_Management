@@ -27,7 +27,7 @@ import DownloadPage from "./pages/DownloadPage";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import LogTest from "./pages/LogTest";
-import AlertsPage from "./pages/Alerts";           // ← NEW
+import AlertsPage from "./pages/Alerts";           // ← NEW Fast Alerts
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient({
@@ -53,19 +53,17 @@ const App = () => (
                 <Route element={<AppLayout />}>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/about" element={<About />} />
-                  
+
                   {/* Equipment Routes */}
                   <Route path="/equipment" element={<EquipmentList />} />
                   <Route path="/equipment/:tag" element={<EquipmentDetail />} />
                   <Route path="/equipment/:tag/log" element={<LogTest />} />
-                  
-                  {/* New Fast Alerts Route */}
-                  <Route path="/alerts" element={<AlertsPage />} />
-                  
-                  {/* Test Schedule (optional dedicated page) */}
-                  <Route path="/test-schedule" element={<TestSchedule />} />
 
-                  {/* Existing Modules */}
+                  {/* Fast Alerts - NEW */}
+                  <Route path="/alerts" element={<AlertsPage />} />
+
+                  {/* Other existing pages */}
+                  <Route path="/test-schedule" element={<TestSchedule />} />
                   <Route path="/dcs" element={<DcsDirectory />} />
                   <Route path="/dcs/:id" element={<DcsDetail />} />
                   <Route path="/manuals" element={<Manuals />} />
