@@ -596,12 +596,14 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
       </div>
     </div>
   );
-}function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initialLast: string; initialNext: string }) {
+}
+
+function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initialLast: string; initialNext: string }) {
   const { t, lang } = useI18n();
   
   const [last, setLast] = useState<Date | undefined>(initialLast ? safeParse(initialLast) : undefined);
   const [next, setNext] = useState<Date | undefined>(initialNext ? safeParse(initialNext) : undefined);
-  const [train, setTrain] = useState("T100");           // ← NEW
+  const [train, setTrain] = useState("T100");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -630,12 +632,16 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
       tag,
       last_tested: last ? format(last, "yyyy-MM-dd") : null,
       next_test_due: next ? format(next, "yyyy-MM-dd") : null,
-      train,                                      // ← NEW
+      train,
       updated_at: new Date().toISOString(),
     });
     setSaving(false);
     if (error) {
-      toast({ title: lang === "en" ? "Save failed" : "Échec d'enregistrement", description: error.message, variant: "destructive" });
+      toast({ 
+        title: lang === "en" ? "Save failed" : "Échec d'enregistrement", 
+        description: error.message, 
+        variant: "destructive" 
+      });
     } else {
       toast({ title: t("saved") });
     }
@@ -649,16 +655,16 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
         {!loaded && <span className="text-xs text-muted-foreground ml-2">Loading...</span>}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-4 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_1fr_auto] gap-4 items-end">
         {/* Train Selector */}
-        <div>
+        <div className="md:col-span-1">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Train / Unité</div>
           <select
             value={train}
             onChange={(e) => setTrain(e.target.value)}
-            className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
-            {["T100","T200","T300","T400","T500","T600"].map(t => (
+            {["T100", "T200", "T300", "T400", "T500", "T600"].map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
@@ -678,6 +684,48 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
     </div>
   );
 }
+
+function DatePickerField({ 
+  label, 
+  date, 
+  onChange 
+}: { 
+  label: string; 
+  date: Date | undefined; 
+  onChange: (d: Date | undefined) => void; 
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex-1">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">{label}</div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button 
+            variant="outline" 
+            className={cn(
+              "w-full justify-start text-left font-mono h-11",
+              !date && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, "yyyy-MM-dd") : t("pickDate")}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0 z-[1000]" align="start">   {/* ← Fixed z-index */}
+          <Calendar 
+            mode="single" 
+            selected={date} 
+            onSelect={onChange} 
+            initialFocus 
+            className="p-3 pointer-events-auto" 
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 
 function DatePickerField({ label, date, onChange }: { label: string; date: Date | undefined; onChange: (d: Date | undefined) => void }) {
   const { t } = useI18n();
