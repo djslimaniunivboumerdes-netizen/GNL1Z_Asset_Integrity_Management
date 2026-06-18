@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight, Database, Cpu, BookOpen, User, Info,
-  Factory, Activity, Package, Workflow, Newspaper, LucideIcon
+  Factory, Activity, Package, Workflow, Newspaper, AlertTriangle, Calendar
 } from "lucide-react";
 
 import { useI18n } from "@/contexts/I18nContext";
@@ -11,7 +11,7 @@ import { META, EQUIPMENT } from "@/data";
 import { GNL1Z_ASSETS } from "@/utils/assets";
 
 import { TestScheduleWidget } from "@/components/TestScheduleWidget";
-import { FastAlertDashboardWidget } from "@/components/FastAlertDashboardWidget"; // 🔴 NEW
+import { FastAlertDashboardWidget } from "@/components/FastAlertDashboardWidget";
 
 const moduleCards = [
   {
@@ -97,7 +97,6 @@ export default function Dashboard() {
 
       {/* HERO */}
       <section className="relative overflow-hidden border-b border-border min-h-[440px] flex items-center bg-zinc-950 w-full">
-
         <div className="absolute inset-0 z-0">
           {heroSlides.map((slide, idx) => (
             <img
@@ -133,27 +132,25 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* 🔴 CORE OPERATION WIDGETS */}
+      {/* CORE OPERATION WIDGETS */}
       <div className="px-4 md:px-10 pt-8 space-y-6">
-
-        {/* Test schedule */}
+        {/* Test Schedule Widget */}
         <TestScheduleWidget />
 
-        {/* Fast alerts (NEW) */}
+        {/* Fast Alerts Widget */}
         <FastAlertDashboardWidget />
-
       </div>
 
-      {/* MODULES */}
+      {/* MODULES GRID */}
       <section className="px-4 md:px-10 py-8 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {moduleCards.map((m, i) => {
+          {moduleCards.map((m) => {
             const IconComponent = m.icon;
             return (
               <Link
                 key={m.key}
                 to={m.to}
-                className={`border rounded-xl p-5 bg-card ${m.color}`}
+                className={`border rounded-xl p-5 bg-card ${m.color} transition-all hover:scale-[1.02]`}
               >
                 <IconComponent className="h-5 w-5 mb-3" />
                 <h3 className="font-bold">{t(m.key as any)}</h3>
@@ -161,7 +158,7 @@ export default function Dashboard() {
                   {lang === "en" ? m.descEn : m.descFr}
                 </p>
 
-                <div className="mt-4 text-[10px] text-muted-foreground">
+                <div className="mt-4 text-[10px] text-muted-foreground flex items-center gap-1">
                   → {m.to}
                 </div>
               </Link>
@@ -180,7 +177,7 @@ function Stat({
   value,
   mono
 }: {
-  icon: LucideIcon;
+  icon: React.ElementType;
   label: string;
   value: string | number;
   mono?: boolean;
