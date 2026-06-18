@@ -4,7 +4,10 @@
 
 /* GNL1Z Industrial Asset Management - Design System
    All colors HSL. Industrial palette: Navy, Slate, Safety Orange. */
-
+/* Fix floating calendar */
+.PopoverContent {
+  z-index: 1000 !important;
+}
 @layer base {
   :root {
     /* Light - engineering report */
