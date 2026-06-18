@@ -1,196 +1,259 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+// src/integrations/supabase/types.ts
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
+export interface Database {
   public: {
     Tables: {
-      dcs_detected_instruments: {
+      // ─────────────────────────────────────────────────────────────
+      // Existing Tables (preserved + enhanced)
+      // ─────────────────────────────────────────────────────────────
+      equipment: {
         Row: {
-          detected_at: string
-          model: string | null
-          panel_id: string
-          tags: Json
-        }
+          id: string;
+          tag: string;
+          name: string | null;
+          description: string | null;
+          area: string | null;
+          unit: string | null;
+          section: string | null;
+          status: string | null;
+          design_pressure: number | null;
+          test_pressure_shell: number | null;
+          test_pressure_tube: number | null;
+          created_at: string;
+          updated_at: string | null;
+        };
         Insert: {
-          detected_at?: string
-          model?: string | null
-          panel_id: string
-          tags?: Json
-        }
+          id?: string;
+          tag: string;
+          name?: string | null;
+          description?: string | null;
+          area?: string | null;
+          unit?: string | null;
+          section?: string | null;
+          status?: string | null;
+          design_pressure?: number | null;
+          test_pressure_shell?: number | null;
+          test_pressure_tube?: number | null;
+          created_at?: string;
+          updated_at?: string | null;
+        };
         Update: {
-          detected_at?: string
-          model?: string | null
-          panel_id?: string
-          tags?: Json
-        }
-        Relationships: []
-      }
+          id?: string;
+          tag?: string;
+          name?: string | null;
+          description?: string | null;
+          area?: string | null;
+          unit?: string | null;
+          section?: string | null;
+          status?: string | null;
+          design_pressure?: number | null;
+          test_pressure_shell?: number | null;
+          test_pressure_tube?: number | null;
+          created_at?: string;
+          updated_at?: string | null;
+        };
+      };
+
+      maintenance_logs: {
+        Row: {
+          id: string;
+          equipment_id: string | null;
+          tag: string | null;                    // Primary identifier
+          maintenance_type: string | null;
+          description: string | null;
+          performed_by: string | null;
+          performed_at: string | null;
+          created_at: string;
+          technician_name: string | null;
+          test_date: string | null;
+          test_type: string | null;
+          test_pressure_shell: number | null;
+          test_pressure_tube: number | null;
+          result: string | null;                 // PASS / FAIL / PENDING
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          equipment_id?: string | null;
+          tag?: string | null;
+          maintenance_type?: string | null;
+          description?: string | null;
+          performed_by?: string | null;
+          performed_at?: string | null;
+          created_at?: string;
+          technician_name?: string | null;
+          test_date?: string | null;
+          test_type?: string | null;
+          test_pressure_shell?: number | null;
+          test_pressure_tube?: number | null;
+          result?: string | null;
+          notes?: string | null;
+        };
+        Update: {
+          id?: string;
+          equipment_id?: string | null;
+          tag?: string | null;
+          maintenance_type?: string | null;
+          description?: string | null;
+          performed_by?: string | null;
+          performed_at?: string | null;
+          created_at?: string;
+          technician_name?: string | null;
+          test_date?: string | null;
+          test_type?: string | null;
+          test_pressure_shell?: number | null;
+          test_pressure_tube?: number | null;
+          result?: string | null;
+          notes?: string | null;
+        };
+      };
+
+      equipment_images: {
+        Row: {
+          id: string;
+          tag: string;
+          file_path: string;
+          file_name: string;
+          mime_type: string | null;
+          size_bytes: number | null;
+          uploaded_by: string | null;
+          uploaded_at: string;
+          equipment_id: string | null;
+          image_url: string | null;
+        };
+        Insert: {
+          id?: string;
+          tag: string;
+          file_path: string;
+          file_name: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          uploaded_by?: string | null;
+          uploaded_at?: string;
+          equipment_id?: string | null;
+          image_url?: string | null;
+        };
+        Update: {
+          id?: string;
+          tag?: string;
+          file_path?: string;
+          file_name?: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          uploaded_by?: string | null;
+          uploaded_at?: string;
+          equipment_id?: string | null;
+          image_url?: string | null;
+        };
+      };
+
       equipment_test_dates: {
         Row: {
-          last_tested: string | null
-          next_test_due: string | null
-          tag: string
-          updated_at: string
-        }
+          tag: string;
+          last_tested: string | null;
+          next_test_due: string | null;
+          updated_at: string;
+        };
         Insert: {
-          last_tested?: string | null
-          next_test_due?: string | null
-          tag: string
-          updated_at?: string
-        }
+          tag: string;
+          last_tested?: string | null;
+          next_test_due?: string | null;
+          updated_at?: string;
+        };
         Update: {
-          last_tested?: string | null
-          next_test_due?: string | null
-          tag?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-    }
+          tag?: string;
+          last_tested?: string | null;
+          next_test_due?: string | null;
+          updated_at?: string;
+        };
+      };
+
+      // ─────────────────────────────────────────────────────────────
+      // NEW TABLE: Fast Alerts
+      // ─────────────────────────────────────────────────────────────
+      alerts: {
+        Row: {
+          id: string;
+          tag: string;
+          alert_type: string;           // FAILED_TEST | OVERDUE_TEST | UPCOMING_TEST | NOTE_KEYWORD
+          priority: 'HIGH' | 'MEDIUM' | 'LOW';
+          message: string;
+          status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+          source_log_id: string | null;
+          created_at: string;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          tag: string;
+          alert_type: string;
+          priority: 'HIGH' | 'MEDIUM' | 'LOW';
+          message: string;
+          status?: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+          source_log_id?: string | null;
+          created_at?: string;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          tag?: string;
+          alert_type?: string;
+          priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+          message?: string;
+          status?: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+          source_log_id?: string | null;
+          created_at?: string;
+          updated_at?: string | null;
+        };
+      };
+
+      profiles: {
+        Row: {
+          id: string;
+          full_name: string | null;
+          role: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          full_name?: string | null;
+          role?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          full_name?: string | null;
+          role?: string | null;
+          created_at?: string;
+        };
+      };
+    };
+
     Views: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
+
     Functions: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
+
     Enums: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
+
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
+      [_ in never]: never;
+    };
+  };
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+// Helper types
+export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T];
+export type Enums<T extends keyof Database['public']['Enums']> = Database['public']['Enums'][T];
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
-
-export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
-
-export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
-
-export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
-
-export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
-export const Constants = {
-  public: {
-    Enums: {},
-  },
-} as const
+// Common row types
+export type Alert = Tables<'alerts'>['Row'];
+export type MaintenanceLog = Tables<'maintenance_logs'>['Row'];
+export type EquipmentImage = Tables<'equipment_images'>['Row'];
+export type EquipmentTestDate = Tables<'equipment_test_dates'>['Row'];
