@@ -1,186 +1,128 @@
-// src/components/TestScheduleWidget.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, AlertTriangle, ChevronRight, ArrowUpDown } from "lucide-react";
-import { buildSchedule } from "@/lib/alertEngine";
-import type { ScheduleItem, ScheduleStatus } from "@/types/alerts";
+import { CalendarClock, ChevronDown, ChevronUp, AlertTriangle, Clock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-type SortKey = "days_left" | "status" | "tag";
-
-const STATUS_ORDER: Record<ScheduleStatus, number> = {
-  OVERDUE:  0,
-  DUE_SOON: 1,
-  OK:       2,
-};
-
-function StatusBadge({ status, daysLeft }: { status: ScheduleStatus; daysLeft: number | null }) {
-  if (status === "OVERDUE") {
-    return (
-      <Badge className="bg-red-600 text-white font-mono text-[10px] shrink-0">
-        OVERDUE {daysLeft !== null ? `${Math.abs(daysLeft)}d` : ""}
-      </Badge>
-    );
-  }
-  if (status === "DUE_SOON") {
-    return (
-      <Badge className="bg-amber-500 text-white font-mono text-[10px] shrink-0">
-        DUE SOON {daysLeft !== null ? `${daysLeft}d` : ""}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="text-emerald-500 border-emerald-500/40 font-mono text-[10px] shrink-0">
-      OK {daysLeft !== null ? `${daysLeft}d` : ""}
-    </Badge>
-  );
-}
+import { Button } from "@/components/ui/button";
+import type { ScheduleItem, ScheduleStatus } from "@/types/alerts";
+import { buildSchedule } from "@/lib/alertEngine";
 
 export function TestScheduleWidget() {
-  const [items, setItems]   = useState<ScheduleItem[]>([]);
+  const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortKey, setSortKey] = useState<SortKey>("days_left");
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    buildSchedule()
-      .then(setItems)
-      .finally(() => setLoading(false));
+    loadSchedule();
   }, []);
 
-  const sorted = useMemo(() => {
-    return [...items].sort((a, b) => {
-      if (sortKey === "tag") return a.tag.localeCompare(b.tag);
-      if (sortKey === "status") {
-        const diff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
-        return diff !== 0 ? diff : (a.days_left ?? 9999) - (b.days_left ?? 9999);
-      }
-      // days_left: nulls last, overdue first (negative days_left)
-      const da = a.days_left ?? 9999;
-      const db = b.days_left ?? 9999;
-      return da - db;
-    });
-  }, [items, sortKey]);
+  async function loadSchedule() {
+    setLoading(true);
+    try {
+      const schedule = await buildSchedule();
+      // Filter out OK status - only show OVERDUE and DUE_SOON
+      const filtered = schedule.filter((item) => item.status !== "OK");
+      setItems(filtered);
+    } catch (err) {
+      console.error("Failed to load schedule:", err);
+    }
+    setLoading(false);
+  }
 
-  const visible   = sorted.slice(0, 15);
-  const overdue   = items.filter((i) => i.status === "OVERDUE").length;
-  const dueSoon   = items.filter((i) => i.status === "DUE_SOON").length;
+  const statusConfig: Record<ScheduleStatus, { label: string; color: string; icon: typeof AlertTriangle }> = {
+    OVERDUE: { label: "Overdue", color: "bg-red-600", icon: AlertTriangle },
+    "DUE_SOON": { label: "Due Soon", color: "bg-amber-500", icon: Clock },
+    OK: { label: "OK", color: "bg-emerald-500", icon: Clock },
+  };
 
   return (
-    <section className="max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+    <Card className="border-border">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-2">
-          <CalendarClock className="h-4 w-4 text-accent" />
-          <h2 className="text-sm uppercase tracking-widest font-mono text-muted-foreground">
-            Next Test Schedule
-          </h2>
-          {overdue > 0 && (
-            <Badge className="bg-red-600 text-white text-[10px]">
-              {overdue} overdue
-            </Badge>
-          )}
-          {dueSoon > 0 && (
-            <Badge className="bg-amber-500 text-white text-[10px]">
-              {dueSoon} due soon
+          <CalendarClock className="h-5 w-5 text-amber-500" />
+          <CardTitle className="text-lg font-display">Test Schedule</CardTitle>
+          {!loading && items.length > 0 && (
+            <Badge variant="secondary" className="text-xs">
+              {items.length} requiring attention
             </Badge>
           )}
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setExpanded((e) => !e)}
+          className="gap-1"
+        >
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {expanded ? "Hide" : "Show"}
+        </Button>
+      </CardHeader>
 
-        {/* Sort controls */}
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] text-muted-foreground mr-1 uppercase tracking-wider">
-            Sort:
-          </span>
-          {(["days_left", "status", "tag"] as SortKey[]).map((k) => (
-            <button
-              key={k}
-              onClick={() => setSortKey(k)}
-              className={`text-[11px] px-2 py-0.5 rounded border transition font-mono ${
-                sortKey === k
-                  ? "bg-accent text-accent-foreground border-accent"
-                  : "border-border text-muted-foreground hover:border-accent/50"
-              }`}
-            >
-              {k === "days_left" ? "Days" : k === "status" ? "Status" : "Tag"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Table header */}
-      <div className="hidden md:grid grid-cols-[1fr_120px_120px_90px_auto] bg-secondary/60 text-[10px] uppercase tracking-wider text-muted-foreground px-4 py-2 rounded-t-lg border border-border border-b-0 font-semibold gap-2">
-        <div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" /> Tag</div>
-        <div>Last Test</div>
-        <div>Next Due</div>
-        <div>Remaining</div>
-        <div>Status</div>
-      </div>
-
-      {/* Rows */}
-      <div className={`border border-border rounded-lg md:rounded-t-none overflow-hidden ${loading ? "opacity-60" : ""}`}>
+      <CardContent>
         {loading ? (
-          <div className="text-sm text-muted-foreground text-center py-10">Loading schedule…</div>
-        ) : visible.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-10 border border-dashed rounded">
-            No scheduled tests found
+          <div className="text-center py-4 text-muted-foreground text-sm">Loading schedule...</div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-4 text-muted-foreground text-sm">
+            No overdue or upcoming tests. All equipment is up to date.
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {visible.map((item) => (
-              <Link
-                key={item.tag}
-                to={`/equipment/${encodeURIComponent(item.tag)}`}
-                className="flex md:grid md:grid-cols-[1fr_120px_120px_90px_auto] items-center gap-2 px-4 py-3 hover:bg-secondary/40 transition text-sm"
-              >
-                {/* Tag */}
-                <div className="flex items-center gap-2 min-w-0">
-                  {item.status === "OVERDUE" && (
-                    <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                  )}
-                  <span className="font-mono font-semibold text-accent truncate">
-                    {item.tag}
-                  </span>
-                </div>
+          <div className="space-y-2">
+            {/* Summary always visible */}
+            <div className="flex gap-2 mb-3">
+              <Badge className="bg-red-600 text-white">
+                {items.filter((i) => i.status === "OVERDUE").length} Overdue
+              </Badge>
+              <Badge className="bg-amber-500 text-white">
+                {items.filter((i) => i.status === "DUE_SOON").length} Due Soon
+              </Badge>
+            </div>
 
-                {/* Last test */}
-                <div className="hidden md:block text-xs text-muted-foreground font-mono">
-                  {item.last_test ?? "—"}
-                </div>
+            {/* Expandable list */}
+            {expanded && (
+              <div className="divide-y divide-border border border-border rounded-lg">
+                {items.map((item) => {
+                  const cfg = statusConfig[item.status];
+                  const Icon = cfg.icon;
+                  return (
+                    <div
+                      key={item.tag}
+                      className="flex items-center justify-between p-3 hover:bg-secondary/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Icon className={`h-4 w-4 shrink-0 ${item.status === "OVERDUE" ? "text-red-500" : "text-amber-500"}`} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{item.tag}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Next due: {item.next_due ?? "—"}
+                            {item.days_left !== null && (
+                              <span className={item.status === "OVERDUE" ? "text-red-500 font-medium" : "text-amber-500 font-medium"}>
+                                {" "}({item.days_left}d)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge className={`${cfg.color} text-white text-[10px] shrink-0`}>
+                        {cfg.label}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-                {/* Next due */}
-                <div className="hidden md:block text-xs font-mono">
-                  {item.next_due ?? "—"}
-                </div>
+            {!expanded && items.length > 0 && (
+              <div className="text-xs text-muted-foreground text-center py-2">
+                Click "Show" to view {items.length} items
+              </div>
+            )}
 
-                {/* Days remaining */}
-                <div className={`hidden md:block text-xs font-bold font-mono ${
-                  item.status === "OVERDUE"   ? "text-red-500"
-                  : item.status === "DUE_SOON" ? "text-amber-500"
-                  : "text-foreground"
-                }`}>
-                  {item.days_left === null
-                    ? "—"
-                    : item.days_left < 0
-                    ? `−${Math.abs(item.days_left)}d`
-                    : `${item.days_left}d`}
-                </div>
-
-                {/* Status badge */}
-                <div className="ml-auto md:ml-0">
-                  <StatusBadge status={item.status} daysLeft={item.days_left} />
-                </div>
-              </Link>
-            ))}
+            <Button asChild variant="outline" size="sm" className="w-full mt-2">
+              <Link to="/test-schedule">View Full Schedule →</Link>
+            </Button>
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      {sorted.length > 15 && (
-        <div className="mt-2 text-xs text-muted-foreground text-right">
-          Showing 15 of {sorted.length} — <Link to="/test-schedule" className="text-accent hover:underline">View all</Link>
-        </div>
-      )}
-    </section>
+      </CardContent>
+    </Card>
   );
 }
