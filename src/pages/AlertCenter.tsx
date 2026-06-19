@@ -1,350 +1,520 @@
-// src/pages/AlertCenter.tsx
-import { useEffect, useState, useCallback } from "react";
-import {
-  AlertTriangle, ShieldAlert, RefreshCw, Filter,
-  CheckCircle2, Clock, XCircle, ChevronDown, Settings2, Save,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { runAlertEngine, computeAlertStats, loadIntervalConfig, saveIntervalConfig } from "@/lib/alertEngine";
-import type { Alert, AlertStats, AlertStatus, AlertType, AlertPriority, TestIntervalConfig } from "@/types/alerts";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ShieldAlert, Filter, ArrowUpDown, MapPin, Camera, Calendar,
+  AlertTriangle, AlertOctagon, AlertCircle, X, Plus, ChevronDown
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { Link } from "react-router-dom";
 
-// ── Constants ────────────────────────────────────────────────────────────────
+const ALERT_TYPES = [
+  { value: "accident", label: "Accident", color: "bg-red-600" },
+  { value: "almost_accident", label: "Almost Accident", color: "bg-orange-500" },
+  { value: "leakage", label: "Leakage", color: "bg-blue-500" },
+  { value: "dangerous", label: "Dangerous Condition", color: "bg-purple-600" },
+  { value: "fire", label: "Fire / Explosion Risk", color: "bg-rose-700" },
+  { value: "equipment_failure", label: "Equipment Failure", color: "bg-amber-600" },
+  { value: "safety_violation", label: "Safety Violation", color: "bg-yellow-600" },
+  { value: "other", label: "Other", color: "bg-gray-500" },
+] as const;
 
-const STATUS_OPTIONS: AlertStatus[] = ["OPEN", "ACKNOWLEDGED", "RESOLVED"];
-const TYPE_OPTIONS: AlertType[] = ["FAILED_TEST", "UPCOMING_TEST", "OVERDUE_TEST", "KEYWORD_NOTE"];
-const PRIORITY_OPTIONS: AlertPriority[] = ["HIGH", "MEDIUM", "LOW"];
+const PRIORITIES = [
+  { value: "P1", label: "P1 — Critical", color: "bg-red-600", textColor: "text-red-600", icon: AlertOctagon },
+  { value: "P2", label: "P2 — High", color: "bg-orange-500", textColor: "text-orange-500", icon: AlertTriangle },
+  { value: "P3", label: "P3 — Medium", color: "bg-yellow-500", textColor: "text-yellow-600", icon: AlertCircle },
+] as const;
 
-const TYPE_LABEL: Record<AlertType, string> = {
-  FAILED_TEST:   "Failed Test",
-  UPCOMING_TEST: "Upcoming Test",
-  OVERDUE_TEST:  "Overdue Test",
-  KEYWORD_NOTE:  "Note Keyword",
-};
+const TRAINS = ["T100", "T200", "T300", "T400", "T500", "T600"] as const;
 
-const PRIORITY_COLOR: Record<AlertPriority, string> = {
-  HIGH:   "bg-red-600   text-white",
-  MEDIUM: "bg-amber-500 text-white",
-  LOW:    "bg-yellow-400 text-black",
-};
+interface FastAlert {
+  id: string;
+  alert_type: string;
+  priority: string;
+  location: string;
+  description: string;
+  photo_url: string | null;
+  created_at: string;
+  status: string;
+}
 
-const PRIORITY_BORDER: Record<AlertPriority, string> = {
-  HIGH:   "border-l-red-500",
-  MEDIUM: "border-l-amber-500",
-  LOW:    "border-l-yellow-400",
-};
-
-const STATUS_ICON: Record<AlertStatus, React.ElementType> = {
-  OPEN:         AlertTriangle,
-  ACKNOWLEDGED: Clock,
-  RESOLVED:     CheckCircle2,
-};
-
-// ── Component ────────────────────────────────────────────────────────────────
+type SortKey = "created_at" | "priority" | "alert_type" | "location";
+type SortDir = "asc" | "desc";
 
 export default function AlertCenter() {
-  const [alerts,  setAlerts]  = useState<Alert[]>([]);
-  const [stats,   setStats]   = useState<AlertStats>({ total_open: 0, overdue: 0, failed_tests: 0, upcoming_tests: 0 });
+  const [alerts, setAlerts] = useState<FastAlert[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   // Filters
-  const [filterStatus,   setFilterStatus]   = useState<AlertStatus | "ALL">("ALL");
-  const [filterType,     setFilterType]     = useState<AlertType   | "ALL">("ALL");
-  const [filterPriority, setFilterPriority] = useState<AlertPriority | "ALL">("ALL");
-  const [search,         setSearch]         = useState("");
+  const [filterPriority, setFilterPriority] = useState<string>("");
+  const [filterType, setFilterType] = useState<string>("");
+  const [filterLocation, setFilterLocation] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Interval settings
-  const [intervals, setIntervals] = useState<TestIntervalConfig>(loadIntervalConfig());
+  // Sort
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from("alerts" as never)
-      .select("*")
-      .order("created_at", { ascending: false }) as { data: Alert[] | null };
+  // Form state
+  const [alertType, setAlertType] = useState("");
+  const [priority, setPriority] = useState("");
+  const [location, setLocation] = useState("");
+  const [customLocation, setCustomLocation] = useState("");
+  const [description, setDescription] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-    const list = data ?? [];
-    setAlerts(list);
-    setStats(computeAlertStats(list));
-    setLoading(false);
+  useEffect(() => {
+    loadAlerts();
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  async function loadAlerts() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("fast_alerts")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  const scan = async () => {
-    setScanning(true);
-    try {
-      await runAlertEngine();
-      await load();
-      toast({ title: "Alert scan complete" });
-    } catch (e: any) {
-      toast({ title: "Scan failed", description: e.message, variant: "destructive" });
-    } finally {
-      setScanning(false);
+    if (!error && data) {
+      setAlerts(data as FastAlert[]);
     }
-  };
+    setLoading(false);
+  }
 
-  const updateStatus = async (id: string, status: AlertStatus) => {
-    const { error } = await supabase
-      .from("alerts" as never)
-      .update({ status } as never)
-      .eq("id", id) as { error: any };
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (file) {
+      setPhoto(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
+  }
 
-    if (error) {
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+  async function submitAlert() {
+    const finalLocation = location === "other" ? customLocation.trim() : location;
+    if (!alertType || !priority || !finalLocation || !description.trim()) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
       return;
     }
-    setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, status } : a));
-    setStats((prev) => computeAlertStats(alerts.map((a) => a.id === id ? { ...a, status } : a)));
-    toast({ title: `Alert ${status.toLowerCase()}` });
-  };
 
-  const saveIntervals = () => {
-    saveIntervalConfig(intervals);
-    toast({ title: "Interval settings saved" });
-    setShowSettings(false);
-  };
+    setSubmitting(true);
 
-  // Filtered list
-  const filtered = alerts.filter((a) => {
-    if (filterStatus   !== "ALL" && a.status     !== filterStatus)   return false;
-    if (filterType     !== "ALL" && a.alert_type !== filterType)     return false;
-    if (filterPriority !== "ALL" && a.priority   !== filterPriority) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      if (!a.tag.toLowerCase().includes(q) && !a.message.toLowerCase().includes(q)) return false;
+    let photoUrl: string | null = null;
+    if (photo) {
+      const fileExt = photo.name.split(".").pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("alert-photos")
+        .upload(fileName, photo);
+
+      if (!uploadError && uploadData) {
+        const { data: urlData } = supabase.storage
+          .from("alert-photos")
+          .getPublicUrl(fileName);
+        photoUrl = urlData?.publicUrl ?? null;
+      }
+    }
+
+    const { error } = await supabase.from("fast_alerts").insert({
+      alert_type: alertType,
+      priority: priority,
+      location: finalLocation,
+      description: description.trim(),
+      photo_url: photoUrl,
+      status: "OPEN",
+    });
+
+    setSubmitting(false);
+
+    if (error) {
+      toast({ title: "Failed to submit alert", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Alert submitted successfully" });
+    setShowForm(false);
+    resetForm();
+    loadAlerts();
+  }
+
+  function resetForm() {
+    setAlertType("");
+    setPriority("");
+    setLocation("");
+    setCustomLocation("");
+    setDescription("");
+    setPhoto(null);
+    setPhotoPreview(null);
+  }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  const typeInfo = (type: string) => ALERT_TYPES.find((t) => t.value === type);
+  const priorityInfo = (p: string) => PRIORITIES.find((pr) => pr.value === p);
+
+  // Filter & sort
+  let filtered = alerts.filter((a) => {
+    if (filterPriority && a.priority !== filterPriority) return false;
+    if (filterType && a.alert_type !== filterType) return false;
+    if (filterLocation && !a.location.toLowerCase().includes(filterLocation.toLowerCase())) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (
+        a.description.toLowerCase().includes(q) ||
+        a.location.toLowerCase().includes(q) ||
+        a.alert_type.toLowerCase().includes(q)
+      );
     }
     return true;
   });
 
-  return (
-    <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto">
+  filtered = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === "created_at") {
+      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    } else if (sortKey === "priority") {
+      const order = { P1: 3, P2: 2, P3: 1 };
+      cmp = (order[a.priority as keyof typeof order] ?? 0) - (order[b.priority as keyof typeof order] ?? 0);
+    } else {
+      cmp = (a[sortKey] ?? "").localeCompare(b[sortKey] ?? "");
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
 
-      {/* Page header */}
-      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="h-5 w-5 text-red-500" />
-          <h1 className="text-2xl font-display font-bold">Alert Center</h1>
+  const stats = {
+    total: alerts.length,
+    p1: alerts.filter((a) => a.priority === "P1").length,
+    p2: alerts.filter((a) => a.priority === "P2").length,
+    p3: alerts.filter((a) => a.priority === "P3").length,
+    open: alerts.filter((a) => a.status === "OPEN").length,
+  };
+
+  return (
+    <div className="px-4 md:px-8 py-6 md:py-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <ShieldAlert className="h-7 w-7 text-red-500" />
+          <div>
+            <h1 className="text-3xl font-display font-bold">Fast Alerts Center</h1>
+            <p className="text-sm text-muted-foreground">Safety incident reporting and tracking</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSettings(!showSettings)}
-            className="gap-2"
-          >
-            <Settings2 className="h-4 w-4" />
-            Intervals
-          </Button>
-          <Button
-            onClick={scan}
-            disabled={scanning}
-            size="sm"
-            className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"
-          >
-            <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
-            {scanning ? "Scanning…" : "Scan Now"}
-          </Button>
-        </div>
+        <Button
+          onClick={() => setShowForm(!showForm)}
+          className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+        >
+          {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {showForm ? "Cancel" : "Report New Alert"}
+        </Button>
       </div>
 
-      {/* Interval settings panel */}
-      {showSettings && (
-        <div className="border border-border rounded-lg bg-card p-5 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Settings2 className="h-4 w-4 text-accent" />
-            <h3 className="font-display font-semibold">Test Interval Configuration (days)</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(["hydrostatic", "psv", "preventive"] as const).map((key) => (
-              <div key={key}>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
-                  {key === "hydrostatic" ? "Hydrostatic Test"
-                   : key === "psv"        ? "PSV Inspection"
-                   : "Preventive Inspection"}
-                </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <StatCard label="Total" value={stats.total} color="bg-zinc-500" />
+        <StatCard label="P1 Critical" value={stats.p1} color="bg-red-600" />
+        <StatCard label="P2 High" value={stats.p2} color="bg-orange-500" />
+        <StatCard label="P3 Medium" value={stats.p3} color="bg-yellow-500" />
+        <StatCard label="Open" value={stats.open} color="bg-blue-500" />
+      </div>
+
+      {/* Submit Form */}
+      {showForm && (
+        <Card className="mb-6 border-red-200">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Report New Safety Alert
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Alert Type */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Alert Type *</label>
+                <select
+                  value={alertType}
+                  onChange={(e) => setAlertType(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select type...</option>
+                  {ALERT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Priority *</label>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select priority...</option>
+                  {PRIORITIES.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Location *</label>
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select location...</option>
+                  {TRAINS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  <option value="other">Other (specify)</option>
+                </select>
+              </div>
+            </div>
+
+            {location === "other" && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Custom Location *</label>
                 <Input
-                  type="number"
-                  min={1}
-                  value={intervals[key]}
-                  onChange={(e) => setIntervals((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                  value={customLocation}
+                  onChange={(e) => setCustomLocation(e.target.value)}
+                  placeholder="Enter location..."
                 />
               </div>
-            ))}
-          </div>
-          <div className="mt-4 flex gap-2 justify-end">
-            <Button variant="outline" size="sm" onClick={() => setShowSettings(false)}>Cancel</Button>
-            <Button size="sm" onClick={saveIntervals} className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
-              <Save className="h-4 w-4" /> Save
+            )}
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Description *</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe the safety incident in detail..."
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Photo</label>
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-dashed border-border rounded-lg hover:bg-secondary transition-colors text-sm">
+                  <Camera className="h-4 w-4" />
+                  {photo ? photo.name : "Choose photo..."}
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                </label>
+                {photoPreview && (
+                  <img src={photoPreview} alt="Preview" className="h-16 w-16 object-cover rounded border border-border" />
+                )}
+              </div>
+            </div>
+
+            <Button
+              onClick={submitAlert}
+              disabled={submitting}
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+            >
+              {submitting ? "Submitting..." : "Submit Alert"}
             </Button>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: "Open Alerts",   value: stats.total_open,    color: "border-red-500/30 bg-red-500/5   text-red-400"   },
-          { label: "Overdue",       value: stats.overdue,       color: "border-red-500/30 bg-red-500/5   text-red-400"   },
-          { label: "Failed Tests",  value: stats.failed_tests,  color: "border-amber-500/30 bg-amber-500/5 text-amber-400" },
-          { label: "Upcoming Tests",value: stats.upcoming_tests,color: "border-amber-500/30 bg-amber-500/5 text-amber-400" },
-        ].map((s) => (
-          <div key={s.label} className={`rounded-lg border p-4 ${s.color}`}>
-            <div className="text-2xl font-bold font-mono">{s.value}</div>
-            <div className="text-[10px] uppercase tracking-wider mt-1 opacity-80">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
       {/* Filters */}
-      <div className="border border-border rounded-lg bg-card p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Filters</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Search</div>
+      <Card className="mb-4">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap gap-2 items-center">
+            <Filter className="h-4 w-4 text-muted-foreground" />
             <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tag or message…"
-              className="h-9 text-sm"
+              placeholder="Search alerts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-48 h-8 text-sm"
             />
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status</div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="ALL">All statuses</option>
-              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Type</div>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as any)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="ALL">All types</option>
-              {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
-            </select>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Priority</div>
             <select
               value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value as any)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
             >
-              <option value="ALL">All priorities</option>
-              {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              <option value="">All Priorities</option>
+              {PRIORITIES.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
             </select>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            >
+              <option value="">All Types</option>
+              {ALERT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            <Input
+              placeholder="Location..."
+              value={filterLocation}
+              onChange={(e) => setFilterLocation(e.target.value)}
+              className="w-32 h-8 text-xs"
+            />
+            {(filterPriority || filterType || filterLocation || searchQuery) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFilterPriority("");
+                  setFilterType("");
+                  setFilterLocation("");
+                  setSearchQuery("");
+                }}
+              >
+                <X className="h-3 w-3" /> Clear
+              </Button>
+            )}
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Alert count */}
-      <div className="text-xs text-muted-foreground mb-2">
-        {filtered.length} alert{filtered.length !== 1 ? "s" : ""} shown
-        {filtered.length !== alerts.length && ` (filtered from ${alerts.length})`}
-      </div>
-
-      {/* Alert table */}
-      <div className="border border-border rounded-lg overflow-hidden bg-card">
-        {/* Table header — desktop */}
-        <div className="hidden md:grid grid-cols-[120px_auto_1fr_130px_140px] bg-secondary/60 text-[10px] uppercase tracking-wider text-muted-foreground px-4 py-2 font-semibold gap-3">
-          <div>Date</div>
-          <div>Tag</div>
-          <div>Message</div>
-          <div>Type / Priority</div>
-          <div>Status</div>
-        </div>
-
-        {loading ? (
-          <div className="text-sm text-muted-foreground text-center py-12">Loading…</div>
-        ) : filtered.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-12">
-            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-500 opacity-60" />
-            No alerts match the current filters
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {filtered.map((a) => {
-              const StatusIcon = STATUS_ICON[a.status];
-              return (
-                <div
-                  key={a.id}
-                  className={`flex flex-col md:grid md:grid-cols-[120px_auto_1fr_130px_140px] gap-2 md:gap-3 px-4 py-3 border-l-2 hover:bg-secondary/30 transition ${PRIORITY_BORDER[a.priority]}`}
-                >
-                  {/* Date */}
-                  <div className="text-[11px] text-muted-foreground font-mono self-start pt-0.5">
-                    {new Date(a.created_at).toLocaleDateString()}<br />
-                    <span className="opacity-60">{new Date(a.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                  </div>
-
-                  {/* Tag */}
-                  <div className="self-start">
-                    <Link
-                      to={`/equipment/${encodeURIComponent(a.tag)}`}
-                      className="font-mono text-sm font-semibold text-accent hover:underline"
-                    >
-                      {a.tag}
-                    </Link>
-                  </div>
-
-                  {/* Message */}
-                  <div className="text-sm text-foreground/90 self-start">{a.message}</div>
-
-                  {/* Type + Priority */}
-                  <div className="flex flex-wrap gap-1.5 self-start">
-                    <Badge className={`text-[10px] font-mono ${PRIORITY_COLOR[a.priority]}`}>
-                      {a.priority}
-                    </Badge>
-                    <Badge variant="outline" className="text-[10px] font-mono">
-                      {TYPE_LABEL[a.alert_type] ?? a.alert_type}
-                    </Badge>
-                  </div>
-
-                  {/* Status + actions */}
-                  <div className="flex items-center gap-1.5 self-start flex-wrap">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <StatusIcon className="h-3.5 w-3.5" />
-                      {a.status}
-                    </div>
-                    {a.status === "OPEN" && (
-                      <button
-                        onClick={() => updateStatus(a.id, "ACKNOWLEDGED")}
-                        className="text-[10px] border border-amber-500/50 text-amber-500 hover:bg-amber-500/10 px-1.5 py-0.5 rounded transition"
-                      >
-                        ACK
+      {/* Alerts Table */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-8 text-center text-muted-foreground">Loading alerts...</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <ShieldAlert className="h-10 w-10 mx-auto mb-2 opacity-30" />
+              No alerts found matching your filters.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/40">
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">
+                      <button onClick={() => toggleSort("priority")} className="flex items-center gap-1 hover:text-foreground">
+                        Priority <ArrowUpDown className="h-3 w-3" />
                       </button>
-                    )}
-                    {a.status !== "RESOLVED" && (
-                      <button
-                        onClick={() => updateStatus(a.id, "RESOLVED")}
-                        className="text-[10px] border border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/10 px-1.5 py-0.5 rounded transition"
-                      >
-                        RESOLVE
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">
+                      <button onClick={() => toggleSort("alert_type")} className="flex items-center gap-1 hover:text-foreground">
+                        Type <ArrowUpDown className="h-3 w-3" />
                       </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">
+                      <button onClick={() => toggleSort("location")} className="flex items-center gap-1 hover:text-foreground">
+                        Location <ArrowUpDown className="h-3 w-3" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">Description</th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">Photo</th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">
+                      <button onClick={() => toggleSort("created_at")} className="flex items-center gap-1 hover:text-foreground">
+                        Date <ArrowUpDown className="h-3 w-3" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filtered.map((alert) => {
+                    const type = typeInfo(alert.alert_type);
+                    const pri = priorityInfo(alert.priority);
+                    const PriIcon = pri?.icon ?? AlertCircle;
+
+                    return (
+                      <tr key={alert.id} className="hover:bg-secondary/20 transition-colors">
+                        {/* Priority */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <PriIcon className={`h-4 w-4 ${pri?.textColor ?? ""}`} />
+                            <Badge className={`${pri?.color ?? "bg-gray-500"} text-white border-0 text-xs`}>
+                              {pri?.label ?? alert.priority}
+                            </Badge>
+                          </div>
+                        </td>
+
+                        {/* Type */}
+                        <td className="px-4 py-3">
+                          <Badge variant="outline" className="text-xs">
+                            {type?.label ?? alert.alert_type}
+                          </Badge>
+                        </td>
+
+                        {/* Location */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 text-xs">
+                            <MapPin className="h-3 w-3 text-muted-foreground" />
+                            {alert.location}
+                          </div>
+                        </td>
+
+                        {/* Description */}
+                        <td className="px-4 py-3 max-w-xs">
+                          <p className="text-xs text-foreground line-clamp-2">{alert.description}</p>
+                        </td>
+
+                        {/* Photo */}
+                        <td className="px-4 py-3">
+                          {alert.photo_url ? (
+                            <img
+                              src={alert.photo_url}
+                              alt="Alert"
+                              className="h-10 w-10 object-cover rounded border border-border"
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+
+                        {/* Date */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(alert.created_at).toLocaleDateString()}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={alert.status === "OPEN" ? "default" : "secondary"}
+                            className="text-[10px]"
+                          >
+                            {alert.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
-             }
+}
+
+function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className={`${color} text-white rounded-lg p-3`}>
+      <div className="text-[10px] uppercase tracking-wider opacity-80">{label}</div>
+      <div className="text-2xl font-bold">{value}</div>
+    </div>
+  );
+      }
