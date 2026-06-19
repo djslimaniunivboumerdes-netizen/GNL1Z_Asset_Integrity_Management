@@ -1,4 +1,3 @@
-// src/pages/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -11,7 +10,7 @@ import { META, EQUIPMENT } from "@/data";
 import { GNL1Z_ASSETS } from "@/utils/assets";
 
 import { TestScheduleWidget } from "@/components/TestScheduleWidget";
-import { FastAlertDashboardWidget } from "@/components/FastAlertDashboardWidget"; // 🔴 NEW
+import FastAlertDashboardWidget from "@/components/FastAlertDashboardWidget"; // 🔴 FIXED: default import
 
 const moduleCards = [
   {
@@ -196,4 +195,4 @@ function Stat({
       </div>
     </div>
   );
-}
+              }
