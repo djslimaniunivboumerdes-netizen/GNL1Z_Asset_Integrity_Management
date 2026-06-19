@@ -1,165 +1,286 @@
-// src/components/FastAlertDashboardWidget.tsx
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ShieldAlert, Clock, XCircle, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { runAlertEngine, computeAlertStats } from "@/lib/alertEngine";
-import type { Alert, AlertStats } from "@/types/alerts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, Camera, MapPin, FileText, Plus, ShieldAlert, X } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
-function StatCard({
-  label,
-  value,
-  color,
-  icon: Icon,
-}: {
-  label: string;
-  value: number;
-  color: string;
-  icon: React.ElementType;
-}) {
-  return (
-    <div className={`rounded-lg border p-3 flex items-center gap-3 ${color}`}>
-      <Icon className="h-5 w-5 shrink-0 opacity-80" />
-      <div>
-        <div className="text-xl font-bold font-mono leading-none">{value}</div>
-        <div className="text-[10px] uppercase tracking-wider mt-0.5 opacity-80">{label}</div>
-      </div>
-    </div>
-  );
+const ALERT_TYPES = [
+  { value: "accident", label: "Accident", color: "bg-red-500" },
+  { value: "almost_accident", label: "Almost Accident", color: "bg-orange-500" },
+  { value: "leakage", label: "Leakage", color: "bg-blue-500" },
+  { value: "dangerous", label: "Dangerous Condition", color: "bg-purple-500" },
+  { value: "fire", label: "Fire / Explosion Risk", color: "bg-rose-600" },
+  { value: "equipment_failure", label: "Equipment Failure", color: "bg-amber-500" },
+  { value: "safety_violation", label: "Safety Violation", color: "bg-yellow-500" },
+  { value: "other", label: "Other", color: "bg-gray-500" },
+] as const;
+
+const TRAINS = ["T100", "T200", "T300", "T400", "T500", "T600"] as const;
+
+interface FastAlert {
+  id: string;
+  alert_type: string;
+  location: string;
+  description: string;
+  photo_url: string | null;
+  created_at: string;
+  created_by?: string;
 }
 
-const PRIORITY_STYLE: Record<string, string> = {
-  HIGH:   "border-red-500/60   bg-red-500/10   text-red-400",
-  MEDIUM: "border-amber-500/60 bg-amber-500/10 text-amber-400",
-  LOW:    "border-yellow-500/60 bg-yellow-500/10 text-yellow-400",
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  FAILED_TEST:   "Failed Test",
-  UPCOMING_TEST: "Upcoming Test",
-  OVERDUE_TEST:  "Overdue Test",
-  KEYWORD_NOTE:  "Note Keyword",
-};
-
 export function FastAlertDashboardWidget() {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [stats,  setStats]  = useState<AlertStats>({ total_open: 0, overdue: 0, failed_tests: 0, upcoming_tests: 0 });
-  const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<FastAlert[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Form state
+  const [alertType, setAlertType] = useState("");
+  const [location, setLocation] = useState("");
+  const [customLocation, setCustomLocation] = useState("");
+  const [description, setDescription] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   useEffect(() => {
-    const init = async () => {
-      // Run engine to generate/sync alerts first
-      await runAlertEngine();
-
-      // Then load top open alerts
-      const { data } = await supabase
-        .from("alerts" as never)
-        .select("*")
-        .in("status", ["OPEN", "ACKNOWLEDGED"])
-        .order("created_at", { ascending: false })
-        .limit(50) as { data: Alert[] | null };
-
-      const list = data ?? [];
-      setAlerts(list.slice(0, 5));
-      setStats(computeAlertStats(list));
-      setLoading(false);
-    };
-    void init();
+    loadAlerts();
   }, []);
 
+  async function loadAlerts() {
+    const { data, error } = await supabase
+      .from("fast_alerts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (!error && data) setAlerts(data as FastAlert[]);
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (file) {
+      setPhoto(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
+  }
+
+  async function submitAlert() {
+    const finalLocation = location === "other" ? customLocation.trim() : location;
+    if (!alertType || !finalLocation || !description.trim()) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+
+    setLoading(true);
+
+    let photoUrl: string | null = null;
+
+    // Upload photo if present
+    if (photo) {
+      const fileExt = photo.name.split(".").pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("alert-photos")
+        .upload(fileName, photo);
+
+      if (!uploadError && uploadData) {
+        const { data: urlData } = supabase.storage
+          .from("alert-photos")
+          .getPublicUrl(fileName);
+        photoUrl = urlData?.publicUrl ?? null;
+      }
+    }
+
+    const { error } = await supabase.from("fast_alerts").insert({
+      alert_type: alertType,
+      location: finalLocation,
+      description: description.trim(),
+      photo_url: photoUrl,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast({ title: "Failed to submit alert", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Alert submitted successfully" });
+    setShowForm(false);
+    resetForm();
+    loadAlerts();
+  }
+
+  function resetForm() {
+    setAlertType("");
+    setLocation("");
+    setCustomLocation("");
+    setDescription("");
+    setPhoto(null);
+    setPhotoPreview(null);
+  }
+
+  const typeInfo = (type: string) => ALERT_TYPES.find((t) => t.value === type);
+
   return (
-    <section className="max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 mb-3">
+    <Card className="border-border">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-2">
-          <ShieldAlert className="h-4 w-4 text-red-500" />
-          <h2 className="text-sm uppercase tracking-widest font-mono text-muted-foreground">
-            Fast Alerts
-          </h2>
-          {stats.total_open > 0 && (
-            <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-              {stats.total_open}
-            </span>
-          )}
+          <ShieldAlert className="h-5 w-5 text-red-500" />
+          <CardTitle className="text-lg font-display">Fast Alerts</CardTitle>
         </div>
-        <Link
-          to="/alerts"
-          className="text-xs text-accent hover:underline flex items-center gap-1"
-        >
-          Alert Center <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            onClick={() => setShowForm(!showForm)}
+          >
+            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showForm ? "Cancel" : "Report Alert"}
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="gap-1">
+            <Link to="/alerts">
+              Alert Center →
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-        <StatCard
-          label="Open Alerts"
-          value={stats.total_open}
-          color="border-red-500/30 bg-red-500/5 text-red-400"
-          icon={AlertTriangle}
-        />
-        <StatCard
-          label="Overdue"
-          value={stats.overdue}
-          color="border-red-500/30 bg-red-500/5 text-red-400"
-          icon={XCircle}
-        />
-        <StatCard
-          label="Failed Tests"
-          value={stats.failed_tests}
-          color="border-amber-500/30 bg-amber-500/5 text-amber-400"
-          icon={ShieldAlert}
-        />
-        <StatCard
-          label="Upcoming Tests"
-          value={stats.upcoming_tests}
-          color="border-amber-500/30 bg-amber-500/5 text-amber-400"
-          icon={Clock}
-        />
-      </div>
+      <CardContent className="space-y-4">
+        {/* ── Submit Form ── */}
+        {showForm && (
+          <div className="border border-border rounded-lg p-4 space-y-3 bg-secondary/20">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Alert Type */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Alert Type *</label>
+                <select
+                  value={alertType}
+                  onChange={(e) => setAlertType(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select type...</option>
+                  {ALERT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
 
-      {/* Recent alerts list */}
-      <div className="border border-border rounded-lg bg-card overflow-hidden">
-        {loading ? (
-          <div className="text-sm text-muted-foreground text-center py-6">Scanning…</div>
-        ) : alerts.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-6 flex items-center justify-center gap-2">
-            <span className="text-emerald-500">✓</span> No open alerts
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {alerts.map((a) => (
-              <Link
-                key={a.id}
-                to={`/equipment/${encodeURIComponent(a.tag)}`}
-                className={`flex items-start gap-3 px-4 py-3 hover:bg-secondary/40 transition border-l-2 ${
-                  a.priority === "HIGH"   ? "border-l-red-500"
-                  : a.priority === "MEDIUM" ? "border-l-amber-500"
-                  : "border-l-yellow-400"
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm font-semibold text-accent">
-                      {a.tag}
-                    </span>
-                    <span className={`text-[10px] border px-1.5 py-0.5 rounded font-mono uppercase ${PRIORITY_STYLE[a.priority]}`}>
-                      {a.priority}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {TYPE_LABEL[a.alert_type] ?? a.alert_type}
-                    </span>
-                  </div>
-                  <p className="text-xs text-foreground/80 mt-1 line-clamp-1">{a.message}</p>
-                </div>
-                <div className="text-[10px] text-muted-foreground font-mono shrink-0 mt-0.5">
-                  {new Date(a.created_at).toLocaleDateString()}
-                </div>
-              </Link>
-            ))}
+              {/* Location */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Location *</label>
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select location...</option>
+                  {TRAINS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  <option value="other">Other (specify)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Custom Location */}
+            {location === "other" && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Custom Location *</label>
+                <Input
+                  value={customLocation}
+                  onChange={(e) => setCustomLocation(e.target.value)}
+                  placeholder="Enter location..."
+                />
+              </div>
+            )}
+
+            {/* Description */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Description *</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe the alert in detail..."
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            {/* Photo Upload */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Photo</label>
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-dashed border-border rounded-lg hover:bg-secondary transition-colors text-sm">
+                  <Camera className="h-4 w-4" />
+                  {photo ? photo.name : "Choose photo..."}
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                </label>
+                {photoPreview && (
+                  <img src={photoPreview} alt="Preview" className="h-16 w-16 object-cover rounded border border-border" />
+                )}
+              </div>
+            </div>
+
+            <Button
+              onClick={submitAlert}
+              disabled={loading}
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+            >
+              {loading ? "Submitting..." : "Submit Alert"}
+            </Button>
           </div>
         )}
-      </div>
-    </section>
+
+        {/* ── Recent Alerts List ── */}
+        <div className="space-y-2">
+          {alerts.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              No alerts reported yet.
+            </div>
+          ) : (
+            alerts.map((alert) => {
+              const type = typeInfo(alert.alert_type);
+              return (
+                <div
+                  key={alert.id}
+                  className="border border-border rounded-lg p-3 flex gap-3 items-start hover:bg-secondary/30 transition-colors"
+                >
+                  {/* Type Badge */}
+                  <div className="shrink-0">
+                    <Badge className={`${type?.color ?? "bg-gray-500"} text-white border-0`}>
+                      {type?.label ?? alert.alert_type}
+                    </Badge>
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                      <MapPin className="h-3 w-3" />
+                      {alert.location}
+                      <span className="text-border">|</span>
+                      {new Date(alert.created_at).toLocaleDateString()}
+                    </div>
+                    <p className="text-sm text-foreground break-words">{alert.description}</p>
+                  </div>
+
+                  {/* Photo Thumbnail */}
+                  {alert.photo_url && (
+                    <img
+                      src={alert.photo_url}
+                      alt="Alert"
+                      className="h-14 w-14 object-cover rounded border border-border shrink-0"
+                    />
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
