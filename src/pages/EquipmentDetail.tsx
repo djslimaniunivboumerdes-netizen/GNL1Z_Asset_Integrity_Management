@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Fuse from "fuse.js";
 import { format, parseISO } from "date-fns";
-import { ArrowLeft, Copy, Check, Download, Wrench, Anchor, Snowflake, Package, Info, Search, FileText, Save, CalendarIcon, ExternalLink, QrCode, X, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Copy, Check, Download, Wrench, Anchor, Snowflake, Package, Info, Search, FileText, Save, CalendarIcon, ExternalLink, QrCode, X, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -460,60 +460,219 @@ function PressureCell({ label, value, accent }: { label: string; value: number |
   );
 }
 
+interface TestRecord {
+  id?: string;
+  tag: string;
+  train: string;
+  last_tested: string | null;
+  next_test_due: string | null;
+  updated_at?: string;
+}
+
 function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initialLast: string; initialNext: string }) {
   const { t, lang } = useI18n();
-  const [last, setLast] = useState<Date | undefined>(initialLast ? safeParse(initialLast) : undefined);
-  const [next, setNext] = useState<Date | undefined>(initialNext ? safeParse(initialNext) : undefined);
+  const [records, setRecords] = useState<TestRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Form state for new/edit
+  const [editTrain, setEditTrain] = useState("T100");
+  const [editLast, setEditLast] = useState<Date | undefined>(undefined);
+  const [editNext, setEditNext] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
     (async () => {
       const { data } = await supabase
         .from("equipment_test_dates")
-        .select("last_tested, next_test_due")
+        .select("id, tag, train, last_tested, next_test_due, updated_at")
         .eq("tag", tag)
-        .maybeSingle();
+        .order("created_at", { ascending: false });
       if (active && data) {
-        if (data.last_tested) setLast(parseISO(data.last_tested));
-        if (data.next_test_due) setNext(parseISO(data.next_test_due));
+        setRecords(data as TestRecord[]);
       }
       if (active) setLoaded(true);
     })();
     return () => { active = false; };
   }, [tag]);
 
-  const save = async () => {
+  const startEdit = (record: TestRecord) => {
+    setEditingId(record.id ?? null);
+    setEditTrain(record.train || "T100");
+    setEditLast(record.last_tested ? safeParse(record.last_tested) : undefined);
+    setEditNext(record.next_test_due ? safeParse(record.next_test_due) : undefined);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTrain("T100");
+    setEditLast(undefined);
+    setEditNext(undefined);
+  };
+
+  const saveRecord = async () => {
+    if (!editTrain) return;
     setSaving(true);
-    const { error } = await supabase.from("equipment_test_dates").upsert({
+
+    const payload = {
       tag,
-      last_tested: last ? format(last, "yyyy-MM-dd") : null,
-      next_test_due: next ? format(next, "yyyy-MM-dd") : null,
+      train: editTrain,
+      last_tested: editLast ? format(editLast, "yyyy-MM-dd") : null,
+      next_test_due: editNext ? format(editNext, "yyyy-MM-dd") : null,
       updated_at: new Date().toISOString(),
-    });
+    };
+
+    let error;
+    if (editingId) {
+      const { error: updateError } = await supabase
+        .from("equipment_test_dates")
+        .update(payload)
+        .eq("id", editingId);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from("equipment_test_dates")
+        .insert(payload);
+      error = insertError;
+    }
+
     setSaving(false);
+
     if (error) {
       toast({ title: lang === "en" ? "Save failed" : "Échec d'enregistrement", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: t("saved") });
+      return;
     }
+
+    toast({ title: editingId ? t("updated") : t("saved") });
+    cancelEdit();
+    // Reload
+    const { data } = await supabase
+      .from("equipment_test_dates")
+      .select("id, tag, train, last_tested, next_test_due, updated_at")
+      .eq("tag", tag)
+      .order("created_at", { ascending: false });
+    setRecords(data as TestRecord[] ?? []);
+  };
+
+  const deleteRecord = async (id: string) => {
+    if (!confirm(lang === "en" ? "Delete this test record?" : "Supprimer cet enregistrement de test ?")) return;
+    const { error } = await supabase
+      .from("equipment_test_dates")
+      .delete()
+      .eq("id", id);
+    if (error) {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setRecords((prev) => prev.filter((r) => r.id !== id));
+    toast({ title: lang === "en" ? "Deleted" : "Supprimé" });
+  };
+
+  const daysUntil = (nextDue?: string | null) => {
+    if (!nextDue) return null;
+    try {
+      return differenceInDays(parseISO(nextDue), new Date());
+    } catch { return null; }
   };
 
   return (
     <div className="border border-border rounded-lg bg-card p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <CalendarIcon className="h-4 w-4 text-accent" />
-        <h3 className="font-display font-semibold">{t("lastTested")} / {t("nextDue")}</h3>
-        {!loaded && <span className="text-xs text-muted-foreground ml-2">…</span>}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <CalendarIcon className="h-4 w-4 text-accent" />
+          <h3 className="font-display font-semibold">{t("lastTested")} / {t("nextDue")}</h3>
+          {!loaded && <span className="text-xs text-muted-foreground ml-2">…</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setExpanded((e) => !e)} className="gap-1">
+            {expanded ? "Hide" : "Show"} ({records.length})
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { cancelEdit(); setExpanded(true); }} className="gap-1">
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
-        <DatePickerField label={t("lastTested")} date={last} onChange={setLast} />
-        <DatePickerField label={t("nextDue")} date={next} onChange={setNext} />
-        <Button onClick={save} disabled={saving} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11">
-          <Save className="h-4 w-4" /> {saving ? "…" : t("saveDates")}
-        </Button>
-      </div>
+
+      {expanded && (
+        <div className="space-y-3">
+          {/* Add/Edit Form */}
+          <div className="border border-dashed border-border rounded-lg p-4 space-y-3 bg-secondary/20">
+            <div className="grid grid-cols-1 md:grid-cols-[120px_1fr_1fr_auto] gap-3 items-end">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Train</div>
+                <select
+                  value={editTrain}
+                  onChange={(e) => setEditTrain(e.target.value)}
+                  className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {TRAINS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <DatePickerField label={t("lastTested")} date={editLast} onChange={setEditLast} />
+              <DatePickerField label={t("nextDue")} date={editNext} onChange={setEditNext} />
+              <div className="flex gap-2">
+                <Button onClick={saveRecord} disabled={saving} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11">
+                  <Save className="h-4 w-4" /> {saving ? "…" : (editingId ? t("update") : t("save"))}
+                </Button>
+                {(editingId || records.length > 0) && (
+                  <Button variant="ghost" size="icon" onClick={cancelEdit} className="h-11 w-11">
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Records List */}
+          {records.length === 0 ? (
+            <EmptyState message={lang === "en" ? "No test records yet." : "Aucun enregistrement de test."} />
+          ) : (
+            <div className="divide-y divide-border">
+              {records.map((record) => {
+                const dLeft = daysUntil(record.next_test_due);
+                const isOverdue = dLeft !== null && dLeft < 0;
+                const isDueSoon = dLeft !== null && dLeft >= 0 && dLeft <= 30;
+
+                return (
+                  <div key={record.id} className="py-3 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="secondary" className="font-mono text-[10px]">{record.train}</Badge>
+                        {record.last_tested && (
+                          <span className="text-xs text-muted-foreground">Last: {record.last_tested}</span>
+                        )}
+                        {record.next_test_due && (
+                          <span className={`text-xs font-medium ${isOverdue ? "text-red-500" : isDueSoon ? "text-amber-500" : "text-emerald-500"}`}>
+                            Next: {record.next_test_due}
+                            {dLeft !== null && ` (${dLeft}d)`}
+                          </span>
+                        )}
+                      </div>
+                      {record.updated_at && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Updated: {new Date(record.updated_at).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(record)}>
+                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => record.id && deleteRecord(record.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
