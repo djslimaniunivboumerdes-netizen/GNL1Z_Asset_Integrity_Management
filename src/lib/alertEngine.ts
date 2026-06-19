@@ -49,3 +49,5 @@ export const DEFAULT_INTERVALS = {
   preventive: 180,
   hydrostatic: 365,
 } as const;
+// ── Backward-compatible alias used by Dashboard.tsx ───────────────────────────
+export const getAlertStats = computeAlertStats;
