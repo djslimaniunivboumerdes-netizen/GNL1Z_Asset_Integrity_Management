@@ -26,3 +26,21 @@ export interface AlertStats {
   open: number;
   highPriority: number;
 }
+
+export interface ScheduleItem {
+  tag: string;
+  last_tested?: string;
+  next_test_due?: string;
+  test_type?: string;
+  status?: ScheduleStatus;
+}
+
+export type ScheduleStatus = 'overdue' | 'due-soon' | 'ok' | 'unknown';
+
+export const DEFAULT_INTERVALS: Record<string, number> = {
+  hydrostatic: 365,
+  pneumatic: 365,
+  ultrasonic: 730,
+  visual: 180,
+  default: 365,
+};
