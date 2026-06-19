@@ -1,41 +1,28 @@
-// src/pages/EquipmentDetail.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Fuse from "fuse.js";
 import { format, parseISO } from "date-fns";
-import { 
-  ArrowLeft, Copy, Check, Download, Wrench, Anchor, Snowflake, 
-  Package, Info, Search, FileText, Save, CalendarIcon, ExternalLink, 
-  QrCode, X, ShieldCheck, AlertTriangle, Calendar 
-} from "lucide-react";
-
+import { ArrowLeft, Copy, Check, Download, Wrench, Anchor, Snowflake, Package, Info, Search, FileText, Save, CalendarIcon, ExternalLink, QrCode, X, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-
 import { getEquipmentByTag, isShellAndTube, type SparePart, type Equipment } from "@/data";
 import {
   predictWrench, predictToolKit, suggestShackle, safetyLoadKg,
   insulationRecommendation, exportToCsv, defaultBoltForType, recommendCrane,
 } from "@/lib/industrial";
-
 import { useI18n } from "@/contexts/I18nContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-
 import { SvgQr } from "@/components/SvgQr";
 import { ImageGallery } from "@/components/ImageGallery";
 import { MaintenanceTimeline } from "@/components/MaintenanceTimeline";
+import { EquipmentTestStatus } from "@/components/EquipmentTestStatus";
 import NotFound from "./NotFound";
-
-// NEW FEATURES
-import { computeNextTestForTag } from "@/lib/testSchedule";
-import { refreshAlertsForTag } from "@/lib/alertEngine";
 
 const TRAINS = ["T100", "T200", "T300", "T400", "T500", "T600"];
 
@@ -44,16 +31,12 @@ export default function EquipmentDetail() {
   const { t, lang } = useI18n();
   const eq = getEquipmentByTag(decodeURIComponent(tag));
 
-  // ── State ─────────────────────────────────────────────────────────────
+  // ── All hooks must be called before any conditional return ──────────────
   const [qrOpen, setQrOpen] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
   const [newNote, setNewNote] = useState("");
-  const [trainNote, setTrainNote] = useState("T100");
+  const [train, setTrain] = useState("T100");
   const [savingNote, setSavingNote] = useState(false);
-
-  // New Features
-  const [testInfo, setTestInfo] = useState<any>(null);
-  const [activeAlerts, setActiveAlerts] = useState<any[]>([]);
 
   if (!eq) return <NotFound />;
 
@@ -67,70 +50,79 @@ export default function EquipmentDetail() {
 
   const pageUrl = `${window.location.origin}/equipment/${encodeURIComponent(eq.tag)}`;
 
-  // ── Load Data ─────────────────────────────────────────────────────────
+  // ── Load notes from Supabase ────────────────────────────────────────────
   useEffect(() => {
     let active = true;
 
     (async () => {
-      // Notes
-      const { data: notesData } = await supabase
+      const { data, error } = await supabase
         .from("equipment_notes")
         .select("*")
         .eq("tag", eq.tag)
         .order("created_at", { ascending: false });
-      if (active) setNotes(notesData ?? []);
 
-      // Test Schedule
-      const testData = await computeNextTestForTag(eq.tag);
-      if (active) setTestInfo(testData);
+      if (error) {
+        console.error("Notes load error:", error.message);
+      }
 
-      // Active Alerts
-      const { data: alertsData } = await supabase
-        .from('alerts')
-        .select('*')
-        .eq('tag', eq.tag)
-        .eq('status', 'OPEN')
-        .order('created_at', { ascending: false });
-      if (active) setActiveAlerts(alertsData || []);
-
-      refreshAlertsForTag(eq.tag);
+      if (active) setNotes(data ?? []);
     })();
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [eq.tag]);
 
-  // ── Notes Functions ───────────────────────────────────────────────────
+  // ── Add note ──────────────────────────────────────────────────────────
   const addNote = async () => {
     if (!newNote.trim()) return;
+
     setSavingNote(true);
 
     const { error } = await supabase.from("equipment_notes").insert({
       tag: eq.tag,
-      train: trainNote,
+      train,
       note: newNote.trim(),
     });
 
     setSavingNote(false);
+
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
       return;
     }
 
     setNewNote("");
+
     const { data } = await supabase
       .from("equipment_notes")
       .select("*")
       .eq("tag", eq.tag)
       .order("created_at", { ascending: false });
+
     setNotes(data ?? []);
   };
 
+  // ── Delete note ───────────────────────────────────────────────────────
   const deleteNote = async (id: string) => {
-    const { error } = await supabase.from("equipment_notes").delete().eq("id", id);
+    const { error } = await supabase
+      .from("equipment_notes")
+      .delete()
+      .eq("id", id);
+
     if (error) {
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      toast({
+        title: "Delete failed",
+        description: error.message,
+        variant: "destructive",
+      });
       return;
     }
+
     setNotes((prev) => prev.filter((n) => n.id !== id));
   };
 
@@ -140,7 +132,7 @@ export default function EquipmentDetail() {
         <Link to="/equipment"><ArrowLeft className="h-4 w-4 mr-1" /> {t("back")}</Link>
       </Button>
 
-      {/* Hero Header */}
+      {/* ── Hero Header ────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden border border-border rounded-lg bg-gradient-industrial p-6 md:p-8 mb-6 text-white">
         <div className="absolute top-0 right-0 w-72 h-72 bg-accent/10 rounded-full blur-3xl" />
         <div className="absolute top-0 left-0 right-0 h-1 stripe-warning" />
@@ -179,10 +171,16 @@ export default function EquipmentDetail() {
                 </p>
                 <div className="font-mono text-[10px] text-white/40 break-all max-w-xs">{pageUrl}</div>
                 <div className="flex gap-2 pt-1">
-                  <button onClick={() => navigator.clipboard.writeText(pageUrl)} className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-1.5 transition-colors">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(pageUrl)}
+                    className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-1.5 transition-colors"
+                  >
                     <Copy className="h-3.5 w-3.5" /> Copy URL
                   </button>
-                  <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-1.5 transition-colors">
+                  <button
+                    onClick={() => window.print()}
+                    className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-1.5 transition-colors"
+                  >
                     <Download className="h-3.5 w-3.5" /> Print
                   </button>
                 </div>
@@ -191,62 +189,6 @@ export default function EquipmentDetail() {
           )}
         </div>
       </div>
-
-      {/* Test Schedule Card */}
-      <Card className="mb-6 border-accent/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-3">
-            <Calendar className="h-5 w-5" /> Test Schedule & Integrity Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {testInfo ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <div className="text-sm text-muted-foreground">Last Test</div>
-                <div className="text-2xl font-mono font-bold mt-1">{testInfo.lastTest}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Next Due</div>
-                <div className="text-2xl font-mono font-bold mt-1 text-accent">{testInfo.nextDue}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Days Remaining</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-3xl font-mono font-bold">{testInfo.daysRemaining}</span>
-                  <Badge variant={testInfo.status === 'OVERDUE' ? "destructive" : testInfo.status === 'DUE SOON' ? "secondary" : "default"}>
-                    {testInfo.status}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-muted-foreground">No test history recorded yet.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Active Alerts */}
-      {activeAlerts.length > 0 && (
-        <Card className="mb-6 border-destructive/50">
-          <CardHeader>
-            <CardTitle className="text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Active Alerts ({activeAlerts.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {activeAlerts.map((alert) => (
-              <div key={alert.id} className="p-4 bg-destructive/10 border-l-4 border-destructive rounded-lg">
-                <p className="font-medium">{alert.message}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {alert.alert_type} • {new Date(alert.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
 
       <Tabs defaultValue="tech" className="w-full">
         <TabsList className="w-full justify-start overflow-x-auto h-auto bg-secondary/60 p-1">
@@ -273,11 +215,76 @@ export default function EquipmentDetail() {
             <BigStat label={t("safetyLoad")} value={`${safety} kg`} accent />
             <BigStat label={t("liftingMethod")} value={eq.maintenance.lifting_method.replace(/_/g, " ")} />
           </div>
-          {/* ... rest of your lifting content ... */}
+          <div className="mt-5 border border-border rounded-lg bg-card p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Anchor className="h-4 w-4 text-accent" />
+              <h3 className="font-display font-semibold">{t("shackle")}</h3>
+            </div>
+            {shackle ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Size</div>
+                  <div className="text-2xl font-display font-bold text-accent">{shackle.size}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">WLL</div>
+                  <div className="text-2xl font-display font-bold font-mono">{shackle.wll_t} t</div>
+                </div>
+                <div className="col-span-2 text-xs text-muted-foreground border-t border-border pt-3">
+                  Calculated from {eq.technical.weight_kg} kg × 1.5 safety factor = {(safety / 1000).toFixed(2)} t. Crosby G-209 reference.
+                </div>
+              </div>
+            ) : (
+              <EmptyState message="No mass recorded — shackle cannot be sized." />
+            )}
+          </div>
+
+          <div className="mt-5 border border-border rounded-lg bg-card p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Wrench className="h-4 w-4 text-accent" />
+              <h3 className="font-display font-semibold">Crane recommendation / Grue recommandée</h3>
+            </div>
+            {crane ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Capacity</div>
+                  <div className="text-2xl font-display font-bold text-accent">{crane.capacity_t}{crane.capacity_t >= 100 ? "+" : ""} T</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Type</div>
+                  <div className="text-base font-display font-semibold">{crane.label}</div>
+                </div>
+                <div className="col-span-2 text-xs text-muted-foreground border-t border-border pt-3">
+                  {crane.rationale}
+                </div>
+                <div className="col-span-2 text-[11px] text-muted-foreground font-mono">
+                  GNL1Z fleet: 12 T · 24 T · 35 T · 54 T · 74 T · 100+ T
+                </div>
+              </div>
+            ) : (
+              <EmptyState message="No mass recorded — crane cannot be sized." />
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="insulation" className="mt-5">
-          {/* ... your insulation content ... */}
+          <div className="border border-border rounded-lg bg-card p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Snowflake className="h-4 w-4 text-accent" />
+              <h3 className="font-display font-semibold">{t("insulationReq")}</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <BigStat label="Status" value={insulation.required ? (lang === "en" ? "Required" : "Requis") : (lang === "en" ? "Not required" : "Non requis")} accent={insulation.required} />
+              <BigStat label="Thickness" value={insulation.thickness_mm ? `${insulation.thickness_mm} mm` : "—"} />
+              <BigStat label="Material" value={insulation.material} />
+            </div>
+            <div className="mt-4 text-sm text-muted-foreground border-t border-border pt-4">
+              <span className="font-semibold text-foreground">Rationale: </span>{insulation.rationale}
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground font-mono">
+              Equipment type: {eq.type.code} ({eq.type.name})
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -289,19 +296,22 @@ export default function EquipmentDetail() {
         </Button>
       </div>
 
-      {/* Field Notes */}
+      {/* ── Field Notes (Multi-Note + Train) ───────────────────────────────── */}
       <div className="mt-6 border border-border rounded-lg bg-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold">Field Notes</h3>
         </div>
 
+        {/* Input row: Train selector + Note text + Save */}
         <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <select
-            value={trainNote}
-            onChange={(e) => setTrainNote(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium"
+            value={train}
+            onChange={(e) => setTrain(e.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 shrink-0"
           >
-            {TRAINS.map((t) => <option key={t} value={t}>{t}</option>)}
+            {TRAINS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
           </select>
 
           <Input
@@ -323,22 +333,36 @@ export default function EquipmentDetail() {
           </Button>
         </div>
 
+        {/* Notes list */}
         <div className="space-y-2">
           {notes.length === 0 ? (
             <p className="text-sm text-muted-foreground">No notes yet.</p>
           ) : (
             notes.map((n) => (
-              <div key={n.id} className="border border-border rounded p-3 flex justify-between items-start gap-3">
+              <div
+                key={n.id}
+                className="border border-border rounded p-3 flex justify-between items-start gap-3"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="secondary" className="font-mono text-[10px]">{n.train || "T100"}</Badge>
+                    <Badge variant="secondary" className="font-mono text-[10px]">
+                      {n.train || "T100"}
+                    </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
+                      {n.created_at
+                        ? new Date(n.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })
+                        : ""}
                     </span>
                   </div>
                   <p className="text-sm break-words">{n.note}</p>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => deleteNote(n.id)}>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => deleteNote(n.id)}
+                  className="shrink-0"
+                >
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -354,8 +378,6 @@ export default function EquipmentDetail() {
     </div>
   );
 }
-
-/* ==================== HELPER COMPONENTS ==================== */
 
 function TechInfoTab({ eq }: { eq: Equipment }) {
   const { t, lang } = useI18n();
@@ -373,7 +395,6 @@ function TechInfoTab({ eq }: { eq: Equipment }) {
         {eq.technical.temperature_c != null && <Field label="Temp (°C)" value={eq.technical.temperature_c} mono />}
       </div>
 
-      {/* Pressure Section */}
       <div className="border border-border rounded-lg bg-card p-5">
         <div className="flex items-center gap-2 mb-4">
           <Info className="h-4 w-4 text-accent" />
@@ -385,7 +406,7 @@ function TechInfoTab({ eq }: { eq: Equipment }) {
             <PressureCell label={`${t("designPressure")} — ${t("shellSide")}`} value={tp?.shell_design_bar} />
             <PressureCell label={`${t("designPressure")} — ${t("tubeSide")}`} value={tp?.tube_design_bar} />
             <PressureCell label={`${t("testPressure")} — ${t("shellSide")}`} value={tp?.shell_test_bar} accent />
-            <PressureCell label={`${t("testPressure")} — ${t("tubeSide")}`} value={tp?.tube_test_bar} accent />
+            <PressureCell label={`${t("testPressure")} — ${t("tubeSide")} / ${t("faciauxSide")}`} value={tp?.tube_test_bar} accent />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
@@ -393,10 +414,49 @@ function TechInfoTab({ eq }: { eq: Equipment }) {
             <PressureCell label={t("testPressure")} value={tp?.test_bar} accent />
           </div>
         )}
+        <div className="text-xs text-muted-foreground mt-3 border-t border-border pt-3">
+          {lang === "en"
+            ? "Test pressures derived per ASME VIII (1.43× MAWP design × 1.3 hydrotest)."
+            : "Pressions d'épreuve calculées selon ASME VIII (1.43× pression de calcul × 1.3 hydrotest)."}
+        </div>
       </div>
 
-      <TestDatesEditor tag={eq.tag} initialLast={eq.maintenance?.last_tested} initialNext={eq.maintenance?.next_test_due} />
+      <div className="border border-border rounded-lg bg-card p-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-accent" />
+            <h3 className="font-display font-semibold">Isolation Plan</h3>
+          </div>
+          {eq.pid_drive_id ? (
+            <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2">
+              <a href={`https://drive.google.com/file/d/${eq.pid_drive_id}/preview`} target="_blank" rel="noopener noreferrer">
+                <FileText className="h-4 w-4" /> Open Isolation Plan
+                <ExternalLink className="h-3.5 w-3.5 ml-1" />
+              </a>
+            </Button>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">No isolation plan</Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Test schedule status (Last Test / Next Due / Remaining Days) */}
+      <EquipmentTestStatus tag={eq.tag} />
+
+      {/* Editable test dates */}
+      <TestDatesEditor tag={eq.tag} initialLast={eq.maintenance.last_tested} initialNext={eq.maintenance.next_test_due} />
     </>
+  );
+}
+
+function PressureCell({ label, value, accent }: { label: string; value: number | null | undefined; accent?: boolean }) {
+  return (
+    <div className="border border-border rounded bg-secondary/40 p-3">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5 leading-tight">{label}</div>
+      <div className={`font-mono font-bold ${accent ? "text-accent text-xl" : "text-foreground text-lg"}`}>
+        {value != null ? `${value} bar` : "—"}
+      </div>
+    </div>
   );
 }
 
@@ -404,7 +464,6 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
   const { t, lang } = useI18n();
   const [last, setLast] = useState<Date | undefined>(initialLast ? safeParse(initialLast) : undefined);
   const [next, setNext] = useState<Date | undefined>(initialNext ? safeParse(initialNext) : undefined);
-  const [train, setTrain] = useState("T100");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -413,13 +472,12 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
     (async () => {
       const { data } = await supabase
         .from("equipment_test_dates")
-        .select("last_tested, next_test_due, train")
+        .select("last_tested, next_test_due")
         .eq("tag", tag)
         .maybeSingle();
       if (active && data) {
         if (data.last_tested) setLast(parseISO(data.last_tested));
         if (data.next_test_due) setNext(parseISO(data.next_test_due));
-        if (data.train) setTrain(data.train);
       }
       if (active) setLoaded(true);
     })();
@@ -432,7 +490,6 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
       tag,
       last_tested: last ? format(last, "yyyy-MM-dd") : null,
       next_test_due: next ? format(next, "yyyy-MM-dd") : null,
-      train,
       updated_at: new Date().toISOString(),
     });
     setSaving(false);
@@ -447,22 +504,14 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
     <div className="border border-border rounded-lg bg-card p-5">
       <div className="flex items-center gap-2 mb-4">
         <CalendarIcon className="h-4 w-4 text-accent" />
-        <h3 className="font-display font-semibold">Test Schedule</h3>
+        <h3 className="font-display font-semibold">{t("lastTested")} / {t("nextDue")}</h3>
+        {!loaded && <span className="text-xs text-muted-foreground ml-2">…</span>}
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_1fr_auto] gap-4 items-end">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Train</div>
-          <select value={train} onChange={(e) => setTrain(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm font-medium">
-            {TRAINS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
         <DatePickerField label={t("lastTested")} date={last} onChange={setLast} />
         <DatePickerField label={t("nextDue")} date={next} onChange={setNext} />
-
-        <Button onClick={save} disabled={saving} className="bg-accent hover:bg-accent/90 text-accent-foreground h-11">
-          <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : t("saveDates")}
+        <Button onClick={save} disabled={saving} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11">
+          <Save className="h-4 w-4" /> {saving ? "…" : t("saveDates")}
         </Button>
       </div>
     </div>
@@ -472,7 +521,7 @@ function TestDatesEditor({ tag, initialLast, initialNext }: { tag: string; initi
 function DatePickerField({ label, date, onChange }: { label: string; date: Date | undefined; onChange: (d: Date | undefined) => void }) {
   const { t } = useI18n();
   return (
-    <div className="flex-1">
+    <div>
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">{label}</div>
       <Popover>
         <PopoverTrigger asChild>
@@ -481,8 +530,8 @@ function DatePickerField({ label, date, onChange }: { label: string; date: Date 
             {date ? format(date, "yyyy-MM-dd") : t("pickDate")}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 z-[1000]" align="start">
-          <Calendar mode="single" selected={date} onSelect={onChange} initialFocus />
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar mode="single" selected={date} onSelect={onChange} initialFocus className={cn("p-3 pointer-events-auto")} />
         </PopoverContent>
       </Popover>
     </div>
@@ -499,17 +548,6 @@ function Field({ label, value, mono, accent }: { label: string; value: string | 
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">{label}</div>
       <div className={`text-lg font-semibold ${mono ? "font-mono" : "font-display"} ${accent ? "text-accent" : "text-foreground"}`}>
         {value || "—"}
-      </div>
-    </div>
-  );
-}
-
-function PressureCell({ label, value, accent }: { label: string; value: number | null | undefined; accent?: boolean }) {
-  return (
-    <div className="border border-border rounded bg-secondary/40 p-3">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5 leading-tight">{label}</div>
-      <div className={`font-mono font-bold ${accent ? "text-accent text-xl" : "text-foreground text-lg"}`}>
-        {value != null ? `${value} bar` : "—"}
       </div>
     </div>
   );
@@ -547,10 +585,14 @@ function PdrTab({ parts, tag }: { parts: SparePart[]; tag: string }) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="pl-9 h-10" />
         </div>
-        <Button variant="outline" className="gap-2" onClick={() => exportToCsv(`${tag}_parts.csv`, list.map((p) => ({
-          code: p.code, description: p.description, category: p.category ?? "", qty: p.qty_installed,
-          location: p.stock_location ?? "", material: p.material ?? "", size: p.size_nominal ?? "",
-        })))}>
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => exportToCsv(`${tag}_parts.csv`, list.map((p) => ({
+            code: p.code, description: p.description, category: p.category ?? "", qty: p.qty_installed,
+            location: p.stock_location ?? "", material: p.material ?? "", size: p.size_nominal ?? "",
+          })))}
+        >
           <Download className="h-4 w-4" /> {t("exportCsv")}
         </Button>
       </div>
@@ -569,6 +611,7 @@ function PdrTab({ parts, tag }: { parts: SparePart[]; tag: string }) {
               <div className="text-xs font-mono text-muted-foreground">{p.stock_location || "—"}</div>
             </div>
           ))}
+          {list.length === 0 && <div className="px-4 py-10 text-center text-muted-foreground">{t("noResults")}</div>}
         </div>
       </div>
     </div>
@@ -616,4 +659,4 @@ function ToolsTab({ boltSize, wrench, tools, liftingMethod, extraTools }: { bolt
       </div>
     </div>
   );
-                                                    }
+      }
