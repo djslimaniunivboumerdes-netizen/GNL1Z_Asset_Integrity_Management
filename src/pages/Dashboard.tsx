@@ -7,6 +7,8 @@ import {
 
 import { useI18n } from "@/contexts/I18nContext";
 import { META, EQUIPMENT } from "@/data";
+// Change line 9 in Dashboard.tsx
+import { computeAlertStats } from "@/lib/alertEngine";
 import { GNL1Z_ASSETS } from "@/utils/assets";
 
 import { TestScheduleWidget } from "@/components/TestScheduleWidget";
