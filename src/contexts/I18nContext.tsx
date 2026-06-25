@@ -76,13 +76,38 @@ const DICT: Dict = {
   exec_summary: { en: "Executive Summary", fr: "Résumé Exécutif" },
   copy: { en: "Copy", fr: "Copier" },
   copied: { en: "Copied!", fr: "Copié !" },
+
+  /* ─── NEW EXPANDED TRANSLATION KEYS ─── */
+  flow: { en: "Process Flow", fr: "Schéma Procédé" },
+  smartFlow: { en: "Smart Flow", fr: "Schéma Intelligent" },
+  testSchedule: { en: "Test Schedule", fr: "Calendrier d'Essais" },
+  fastAlerts: { en: "Fast Alerts", fr: "Alertes Rapides" },
+  signIn: { en: "Sign In", fr: "Connexion" },
+  signOut: { en: "Sign Out", fr: "Déconnexion" },
+  operatorProfile: { en: "Operator Profile", fr: "Profil Opérateur" },
+  appDownloads: { en: "App Downloads", fr: "Téléchargements" },
+  systemModules: { en: "System Modules", fr: "Modules du Système" },
+  exploreModule: { en: "Explore Module", fr: "Explorer le Module" },
+  facilityTag: { en: "SONATRACH AP-C3MR™ LIQUEFACTION FACILITY", fr: "USINE DE LIQUÉFACTION AP-C3MR™ SONATRACH" },
+  testScheduleTitle: { en: "Maintenance & Test Schedule", fr: "Calendrier de Maintenance & d'Essais" },
+  fastAlertsTitle: { en: "Active Fast Alerts", fr: "Alertes Rapides Actives" },
+  catalogBadge: { en: "CATALOG", fr: "CATALOGUE" },
+  integrationBadge: { en: "INTEGRATION", fr: "INTÉGRATION" },
+  processBadge: { en: "PROCESS", fr: "PROCÉDÉ" },
+  marketBadge: { en: "MARKET", fr: "MARCHÉ" },
+  operationsBadge: { en: "OPERATIONS", fr: "OPÉRATIONS" },
+  executiveBadge: { en: "EXECUTIVE", fr: "EXÉCUTIF" },
+  credentialsBadge: { en: "CREDENTIALS", fr: "RÉFÉRENCES" },
+  loading: { en: "Loading...", fr: "Chargement..." },
+  viewAll: { en: "View All", fr: "Voir Tout" },
+  collapse: { en: "Collapse", fr: "Réduire" },
 };
 
 interface I18nContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
   toggle: () => void;
-  t: (key: keyof typeof DICT) => string;
+  t: (key: keyof typeof DICT | string) => string;
 }
 
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
@@ -108,4 +133,4 @@ export function useI18n() {
   const ctx = useContext(I18nContext);
   if (!ctx) throw new Error("useI18n must be used within I18nProvider");
   return ctx;
-}
+  }
