@@ -22,6 +22,7 @@ import { SvgQr } from "@/components/SvgQr";
 import { ImageGallery } from "@/components/ImageGallery";
 import { MaintenanceTimeline } from "@/components/MaintenanceTimeline";
 import { EquipmentTestStatus } from "@/components/EquipmentTestStatus";
+import { ProcessInfoTab } from "@/components/ProcessInfoTab";
 import NotFound from "./NotFound";
 
 const TRAINS = ["T100", "T200", "T300", "T400", "T500", "T600"];
@@ -440,6 +441,9 @@ function TechInfoTab({ eq }: { eq: Equipment }) {
         </div>
       </div>
 
+      {/* Process & P&ID Engineering Data */}
+      <ProcessInfoTab tag={eq.tag} />
+
       {/* Test schedule status (Last Test / Next Due / Remaining Days) */}
       <EquipmentTestStatus tag={eq.tag} />
 
@@ -818,4 +822,4 @@ function ToolsTab({ boltSize, wrench, tools, liftingMethod, extraTools }: { bolt
       </div>
     </div>
   );
-      }
+    }
