@@ -4,6 +4,7 @@ import {
   Download, CheckCircle, ExternalLink,
   Shield, Zap, RefreshCw, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 
 const GITHUB_REPO = "djslimaniunivboumerdes-netizen/GNL1Z_Asset_Integrity_Management";
 const WEBAPP_URL  = "https://gnl1z.pages.dev";
@@ -33,6 +34,10 @@ const tx = {
     source: "Source Code",
     allReleases: "All Releases",
     loading: "Fetching latest release...",
+    howToInstall: "How to install",
+    hideSteps: "Hide steps",
+    done: "Done!",
+    downloading: "Downloading...",
     platforms: {
       android: { title: "Android", desc: "Direct APK install", btn: "Download APK", note: "Android 7.0+",
         steps: ["Tap Download APK", 'Settings → Security → Enable "Unknown sources"', "Open the APK and tap Install"] },
@@ -54,6 +59,10 @@ const tx = {
     source: "Code Source",
     allReleases: "Toutes les versions",
     loading: "Récupération de la version...",
+    howToInstall: "Comment installer",
+    hideSteps: "Masquer les étapes",
+    done: "Terminé !",
+    downloading: "Téléchargement...",
     platforms: {
       android: { title: "Android", desc: "Installation APK directe", btn: "Télécharger l'APK", note: "Android 7.0+",
         steps: ["Appuyer sur Télécharger l'APK", 'Paramètres → Sécurité → Activer "Sources inconnues"', "Ouvrir l'APK et installer"] },
@@ -69,11 +78,12 @@ const tx = {
 
 function PlatformCard({
   icon, accent, title, desc, btn, steps, note,
-  url, size, external = false, available = true, badge,
+  url, size, external = false, available = true, badge, howToInstall, hideSteps, doneLabel, downloadingLabel,
 }: {
   icon: React.ReactNode; accent: string; title: string; desc: string;
   btn: string; steps: string[]; note: string; url: string;
   size?: string; external?: boolean; available?: boolean; badge?: string;
+  howToInstall: string; hideSteps: string; doneLabel: string; downloadingLabel: string;
 }) {
   const [state,  setState]  = useState<"idle" | "loading" | "done">("idle");
   const [expand, setExpand] = useState(false);
@@ -121,7 +131,7 @@ function PlatformCard({
           onClick={() => setExpand(!expand)}
         >
           {expand ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          {expand ? "Hide steps" : "How to install"}
+          {expand ? hideSteps : howToInstall}
         </button>
         {expand && (
           <ol className="space-y-2 mb-4">
@@ -145,8 +155,8 @@ function PlatformCard({
               : "bg-muted text-muted-foreground cursor-not-allowed"
           }`}
         >
-          {state === "done"    ? <><CheckCircle className="h-4 w-4" /> Done!</>
-           : state === "loading" ? <><span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Downloading...</>
+          {state === "done"    ? <><CheckCircle className="h-4 w-4" /> {doneLabel}</>
+           : state === "loading" ? <><span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {downloadingLabel}</>
            : external           ? <><ExternalLink className="h-4 w-4" /> {btn}</>
            :                      <><Download className="h-4 w-4" /> {btn}</>}
         </button>
@@ -157,7 +167,8 @@ function PlatformCard({
   );
 }
 
-export default function DownloadPage({ lang = "en" }: { lang?: "en" | "fr" }) {
+export default function DownloadPage() {
+  const { lang } = useI18n();
   const T = tx[lang];
   const [release,  setRelease]  = useState<Release | null>(null);
   const [loading,  setLoading]  = useState(true);
@@ -237,14 +248,16 @@ export default function DownloadPage({ lang = "en" }: { lang?: "en" | "fr" }) {
             icon={<Smartphone className="h-5 w-5" />}
             accent="bg-gradient-to-br from-green-500 to-emerald-600"
             url={apkUrl} size={apkAsset ? fmtBytes(apkAsset.size) : "5.8 MB"}
-            available={true} {...T.platforms.android}
+            available={true}
+            howToInstall={T.howToInstall} hideSteps={T.hideSteps} doneLabel={T.done} downloadingLabel={T.downloading}
+            {...T.platforms.android}
           />
           <PlatformCard
             icon={<Monitor className="h-5 w-5" />}
             accent="bg-gradient-to-br from-blue-500 to-blue-700"
             url={exeUrl} size={exeAsset ? fmtBytes(exeAsset.size) : undefined}
             available={!!exeAsset}
-            badge={!exeAsset ? (lang === "fr" ? "Build en cours" : "Building...") : undefined}
+            howToInstall={T.howToInstall} hideSteps={T.hideSteps} doneLabel={T.done} downloadingLabel={T.downloading} badge={!exeAsset ? (lang === "fr" ? "Build en cours" : "Building...") : undefined}
             {...T.platforms.windows}
           />
           <PlatformCard
@@ -252,13 +265,14 @@ export default function DownloadPage({ lang = "en" }: { lang?: "en" | "fr" }) {
             accent="bg-gradient-to-br from-gray-500 to-gray-800"
             url={TESTFLIGHT} external={true}
             available={!!TESTFLIGHT}
-            badge={!TESTFLIGHT ? (lang === "fr" ? "Bientôt" : "Coming soon") : undefined}
+            howToInstall={T.howToInstall} hideSteps={T.hideSteps} doneLabel={T.done} downloadingLabel={T.downloading} badge={!TESTFLIGHT ? (lang === "fr" ? "Bientôt" : "Coming soon") : undefined}
             {...T.platforms.ios}
           />
           <PlatformCard
             icon={<Globe className="h-5 w-5" />}
             accent="bg-gradient-to-br from-amber-500 to-orange-600"
             url={WEBAPP_URL} external={true} available={true}
+            howToInstall={T.howToInstall} hideSteps={T.hideSteps} doneLabel={T.done} downloadingLabel={T.downloading}
             {...T.platforms.web}
           />
         </div>

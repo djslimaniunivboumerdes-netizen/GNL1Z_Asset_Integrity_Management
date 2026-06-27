@@ -71,12 +71,13 @@ function Avatar({ user }: { user: User }) {
 // ─── User menu (avatar button + dropdown) ─────────────────────────────────────
 function UserMenu({ user }: { user: User }) {
   const { signOut } = useAuth();
+  const { t, lang } = useI18n();
   const navigate    = useNavigate();
 
   const displayName: string =
     (user.user_metadata?.full_name as string | undefined) ||
     (user.user_metadata?.name      as string | undefined) ||
-    user.email?.split("@")[0] || "User";
+    user.email?.split("@")[0] || t("user");
 
   const isGoogle =
     (user.app_metadata?.provider as string | undefined) === "google" ||
@@ -117,7 +118,7 @@ function UserMenu({ user }: { user: User }) {
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                   </svg>
-                  Google account
+                  {lang === "fr" ? "Compte Google" : "Google account"}
                 </span>
               )}
             </div>
@@ -131,7 +132,7 @@ function UserMenu({ user }: { user: User }) {
           onClick={() => navigate("/author")}
         >
           <UserCircle2 className="h-4 w-4 text-muted-foreground" />
-          Profile
+          {t("profile")}
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -139,7 +140,7 @@ function UserMenu({ user }: { user: User }) {
           onClick={() => navigate("/download")}
         >
           <Settings className="h-4 w-4 text-muted-foreground" />
-          Downloads
+          {t("downloads")}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -149,7 +150,7 @@ function UserMenu({ user }: { user: User }) {
           onClick={signOut}
         >
           <LogOut className="h-4 w-4" />
-          Sign out
+          {t("signOut")}
         </DropdownMenuItem>
 
       </DropdownMenuContent>
@@ -160,7 +161,7 @@ function UserMenu({ user }: { user: User }) {
 // ─── AppHeader ────────────────────────────────────────────────────────────────
 export function AppHeader() {
   const { theme, toggle }    = useTheme();
-  const { lang, toggle: toggleLang } = useI18n();
+  const { lang, toggle: toggleLang, t } = useI18n();
   const { user }             = useAuth();
   const navigate             = useNavigate();
 
@@ -202,7 +203,7 @@ export function AppHeader() {
             className="gap-1.5 font-mono text-xs"
           >
             <LogIn className="h-4 w-4" />
-            <span className="hidden sm:inline">Sign in</span>
+            <span className="hidden sm:inline">{t("signIn")}</span>
           </Button>
         )}
       </div>

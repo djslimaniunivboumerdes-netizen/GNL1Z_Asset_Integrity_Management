@@ -101,6 +101,28 @@ const DICT: Dict = {
   loading: { en: "Loading...", fr: "Chargement..." },
   viewAll: { en: "View All", fr: "Voir Tout" },
   collapse: { en: "Collapse", fr: "Réduire" },
+
+  user: { en: "User", fr: "Utilisateur" },
+  profile: { en: "Profile", fr: "Profil" },
+  downloads: { en: "Downloads", fr: "Téléchargements" },
+  total: { en: "Total", fr: "Total" },
+  critical: { en: "Critical", fr: "Critique" },
+  high: { en: "High", fr: "Élevé" },
+  medium: { en: "Medium", fr: "Moyen" },
+  closed: { en: "Closed", fr: "Fermée" },
+  actions: { en: "Actions", fr: "Actions" },
+  photo: { en: "Photo", fr: "Photo" },
+  date: { en: "Date", fr: "Date" },
+  priority: { en: "Priority", fr: "Priorité" },
+  all: { en: "All", fr: "Tous" },
+  sort: { en: "Sort", fr: "Trier" },
+  days: { en: "Days", fr: "Jours" },
+  remaining: { en: "Remaining", fr: "Restant" },
+  cancel: { en: "Cancel", fr: "Annuler" },
+  save: { en: "Save", fr: "Enregistrer" },
+  clear: { en: "Clear", fr: "Effacer" },
+  submit: { en: "Submit", fr: "Soumettre" },
+  error: { en: "Error", fr: "Erreur" },
 };
 
 interface I18nContextValue {

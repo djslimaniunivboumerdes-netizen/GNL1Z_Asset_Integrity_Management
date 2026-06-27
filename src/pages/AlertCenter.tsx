@@ -11,22 +11,23 @@ import {
   ZoomIn, Pencil, Trash2, CheckCircle
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useI18n } from "@/contexts/I18nContext";
 
 const ALERT_TYPES = [
-  { value: "accident", label: "Accident", color: "bg-red-600" },
-  { value: "almost_accident", label: "Almost Accident / Near Miss", color: "bg-orange-500" },
-  { value: "leakage", label: "Leakage", color: "bg-blue-500" },
-  { value: "dangerous", label: "Dangerous Situation", color: "bg-purple-600" },
-  { value: "fire", label: "Fire / Explosion Risk", color: "bg-rose-700" },
-  { value: "equipment_failure", label: "Equipment Failure", color: "bg-amber-600" },
-  { value: "safety_violation", label: "Safety Violation", color: "bg-yellow-600" },
-  { value: "other", label: "Other", color: "bg-gray-500" },
+  { value: "accident", label: "Accident", labelFr: "Accident", color: "bg-red-600" },
+  { value: "almost_accident", label: "Almost Accident / Near Miss", labelFr: "Presque accident", color: "bg-orange-500" },
+  { value: "leakage", label: "Leakage", labelFr: "Fuite", color: "bg-blue-500" },
+  { value: "dangerous", label: "Dangerous Situation", labelFr: "Situation dangereuse", color: "bg-purple-600" },
+  { value: "fire", label: "Fire / Explosion Risk", labelFr: "Risque d’incendie / explosion", color: "bg-rose-700" },
+  { value: "equipment_failure", label: "Equipment Failure", labelFr: "Défaillance équipement", color: "bg-amber-600" },
+  { value: "safety_violation", label: "Safety Violation", labelFr: "Infraction sécurité", color: "bg-yellow-600" },
+  { value: "other", label: "Other", labelFr: "Autre", color: "bg-gray-500" },
 ] as const;
 
 const PRIORITIES = [
-  { value: "P1", label: "P1 — Critical", color: "bg-red-600", textColor: "text-red-600", icon: AlertOctagon },
-  { value: "P2", label: "P2 — High", color: "bg-orange-500", textColor: "text-orange-500", icon: AlertTriangle },
-  { value: "P3", label: "P3 — Medium", color: "bg-yellow-500", textColor: "text-yellow-600", icon: AlertCircle },
+  { value: "P1", label: "P1 — Critical", labelFr: "P1 — Critique", color: "bg-red-600", textColor: "text-red-600", icon: AlertOctagon },
+  { value: "P2", label: "P2 — High", labelFr: "P2 — Élevée", color: "bg-orange-500", textColor: "text-orange-500", icon: AlertTriangle },
+  { value: "P3", label: "P3 — Medium", labelFr: "P3 — Moyenne", color: "bg-yellow-500", textColor: "text-yellow-600", icon: AlertCircle },
 ] as const;
 
 const TRAINS = ["T100", "T200", "T300", "T400", "T500", "T600"] as const;
@@ -57,7 +58,55 @@ interface FastAlert {
 type SortKey = "created_at" | "priority" | "alert_type" | "location";
 type SortDir = "asc" | "desc";
 
+const UI = {
+  en: {
+    title: "{L.title}",
+    subtitle: "{L.subtitle}",
+    cancel: "Cancel",
+    report: "Report New Alert",
+    emergencyHotline: "{L.emergencyHotline}",
+    urgent: SONATRACH_HSE.urgent,
+    total: "Total", p1: "P1 Critical", p2: "P2 High", p3: "P3 Medium", open: "Open", closed: "Closed",
+    reportTitle: "{L.reportTitle}", alertType: "{L.alertType}", selectType: "{L.selectType}",
+    priority: "{L.priority}", selectPriority: "{L.selectPriority}", location: "{L.location}", selectLocation: "{L.selectLocation}",
+    otherSpecify: "{L.otherSpecify}", enterLocation: "Enter location...", describe: "Describe the safety incident in detail...",
+    choosePhoto: "Choose photo (PNG, JPG, HEIC)...", submitting: "Submitting...", submitAlert: "Submit Alert",
+    searchAlerts: "Search alerts...", allPriorities: "{L.allPriorities}", allTypes: "{L.allTypes}", allStatus: "{L.allStatus}",
+    locationDots: "Location...", clear: "{L.clear}", loadingAlerts: "{L.loadingAlerts}", noAlerts: "{L.noAlerts}",
+    type: "Type", description: "Description", photo: "Photo", date: "Date", status: "Status", actions: "Actions",
+    other: "Other", save: "Save", deleteConfirm: "Delete this alert?",
+    fillRequired: "Please fill all required fields", submitFailed: "Failed to submit alert", submitted: "Alert submitted successfully",
+    updateFailed: "Update failed", updated: "Alert updated", deleteFailed: "Delete failed", deleted: "Alert deleted", closeFailed: "Close failed", closedToast: "Alert closed",
+  },
+  fr: {
+    title: "Centre d’alertes rapides",
+    subtitle: "Déclaration et suivi des incidents sécurité — Complexe GNL GL1Z",
+    cancel: "Annuler",
+    report: "Signaler une alerte",
+    emergencyHotline: "Numéros d’urgence",
+    urgent: "Si une action urgente est requise, informez immédiatement le chef de poste ou appelez",
+    total: "Total", p1: "P1 Critique", p2: "P2 Élevée", p3: "P3 Moyenne", open: "Ouvertes", closed: "Fermées",
+    reportTitle: "Signaler une nouvelle alerte sécurité", alertType: "Type d’alerte *", selectType: "Sélectionner le type...",
+    priority: "Priorité *", selectPriority: "Sélectionner la priorité...", location: "Emplacement *", selectLocation: "Sélectionner l’emplacement...",
+    otherSpecify: "Autre (préciser)", enterLocation: "Saisir l’emplacement...", describe: "Décrire l’incident sécurité en détail...",
+    choosePhoto: "Choisir une photo (PNG, JPG, HEIC)...", submitting: "Soumission...", submitAlert: "Soumettre l’alerte",
+    searchAlerts: "Rechercher des alertes...", allPriorities: "Toutes priorités", allTypes: "Tous types", allStatus: "Tous statuts",
+    locationDots: "Emplacement...", clear: "Effacer", loadingAlerts: "Chargement des alertes...", noAlerts: "Aucune alerte ne correspond aux filtres.",
+    type: "Type", description: "Description", photo: "Photo", date: "Date", status: "Statut", actions: "Actions",
+    other: "Autre", save: "Enregistrer", deleteConfirm: "Supprimer cette alerte ?",
+    fillRequired: "Veuillez remplir tous les champs obligatoires", submitFailed: "Échec de l’envoi de l’alerte", submitted: "Alerte soumise avec succès",
+    updateFailed: "Échec de la mise à jour", updated: "Alerte mise à jour", deleteFailed: "Échec de la suppression", deleted: "Alerte supprimée", closeFailed: "Échec de la clôture", closedToast: "Alerte clôturée",
+  },
+};
+
+const labelOf = <T extends { label: string; labelFr?: string }>(item: T, lang: "en" | "fr") =>
+  lang === "fr" ? item.labelFr ?? item.label : item.label;
+const statusLabel = (status: string, lang: "en" | "fr") =>
+  lang === "fr" ? (status === "OPEN" ? "Ouverte" : status === "CLOSED" ? "Fermée" : status) : (status === "OPEN" ? "Open" : status === "CLOSED" ? "Closed" : status);
+
 export default function AlertCenter() {
+  const { lang } = useI18n();
+  const L = UI[lang];
   const [alerts, setAlerts] = useState<FastAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -129,7 +178,7 @@ export default function AlertCenter() {
   async function submitAlert() {
     const finalLocation = location === "other" ? customLocation.trim() : location;
     if (!alertType || !priority || !finalLocation || !description.trim()) {
-      toast({ title: "Please fill all required fields", variant: "destructive" });
+      toast({ title: L.fillRequired, variant: "destructive" });
       return;
     }
 
@@ -164,11 +213,11 @@ export default function AlertCenter() {
     setSubmitting(false);
 
     if (error) {
-      toast({ title: "Failed to submit alert", description: error.message, variant: "destructive" });
+      toast({ title: L.submitFailed, description: error.message, variant: "destructive" });
       return;
     }
 
-    toast({ title: "Alert submitted successfully" });
+    toast({ title: L.submitted });
     setShowForm(false);
     resetForm();
     loadAlerts();
@@ -208,24 +257,24 @@ export default function AlertCenter() {
       .eq("id", editingId);
 
     if (error) {
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+      toast({ title: L.updateFailed, description: error.message, variant: "destructive" });
       return;
     }
 
-    toast({ title: "Alert updated" });
+    toast({ title: L.updated });
     setEditingId(null);
     loadAlerts();
   }
 
   async function deleteAlert(id: string) {
-    if (!confirm("Delete this alert?")) return;
+    if (!confirm(L.deleteConfirm)) return;
     const { error } = await supabase.from("fast_alerts").delete().eq("id", id);
     if (error) {
-      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      toast({ title: L.deleteFailed, description: error.message, variant: "destructive" });
       return;
     }
     setAlerts((prev) => prev.filter((a) => a.id !== id));
-    toast({ title: "Alert deleted" });
+    toast({ title: L.deleted });
   }
 
   async function closeAlert(id: string) {
@@ -234,11 +283,11 @@ export default function AlertCenter() {
       .update({ status: "CLOSED" })
       .eq("id", id);
     if (error) {
-      toast({ title: "Close failed", description: error.message, variant: "destructive" });
+      toast({ title: L.closeFailed, description: error.message, variant: "destructive" });
       return;
     }
     setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, status: "CLOSED" } : a));
-    toast({ title: "Alert closed" });
+    toast({ title: L.closedToast });
   }
 
   function toggleSort(key: SortKey) {
@@ -299,13 +348,13 @@ export default function AlertCenter() {
         <div className="flex items-center gap-3">
           <ShieldAlert className="h-7 w-7 text-red-500" />
           <div>
-            <h1 className="text-3xl font-display font-bold">Fast Alerts Center</h1>
-            <p className="text-sm text-muted-foreground">Safety incident reporting and tracking — GL1Z LNG Complex</p>
+            <h1 className="text-3xl font-display font-bold">{L.title}</h1>
+            <p className="text-sm text-muted-foreground">{L.subtitle}</p>
           </div>
         </div>
         <Button onClick={() => setShowForm(!showForm)} className="gap-2 bg-red-600 hover:bg-red-700 text-white">
           {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showForm ? "Cancel" : "Report New Alert"}
+          {showForm ? L.cancel : L.report}
         </Button>
       </div>
 
@@ -320,14 +369,14 @@ export default function AlertCenter() {
               </div>
               <p className="text-sm text-red-700 mb-1">{SONATRACH_HSE.titleEn}</p>
               <p className="text-xs text-red-600 font-arabic" dir="rtl">{SONATRACH_HSE.titleAr}</p>
-              <p className="text-xs text-muted-foreground mt-2">{SONATRACH_HSE.instruction}</p>
+              <p className="text-xs text-muted-foreground mt-2">{lang === "fr" ? SONATRACH_HSE.instructionFr : SONATRACH_HSE.instruction}</p>
             </div>
             <div className="shrink-0 text-center md:text-right">
-              <div className="text-xs text-red-700 font-medium mb-1">Emergency Hotline</div>
+              <div className="text-xs text-red-700 font-medium mb-1">{L.emergencyHotline}</div>
               <div className="text-2xl font-bold font-mono text-red-800">
                 {SONATRACH_HSE.phones.join(" / ")}
               </div>
-              <p className="text-[10px] text-red-600 mt-1">{SONATRACH_HSE.urgent}</p>
+              <p className="text-[10px] text-red-600 mt-1">{L.urgent}</p>
             </div>
           </div>
         </CardContent>
@@ -335,12 +384,12 @@ export default function AlertCenter() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-        <StatCard label="Total" value={stats.total} color="bg-zinc-500" />
-        <StatCard label="P1 Critical" value={stats.p1} color="bg-red-600" />
-        <StatCard label="P2 High" value={stats.p2} color="bg-orange-500" />
-        <StatCard label="P3 Medium" value={stats.p3} color="bg-yellow-500" />
-        <StatCard label="Open" value={stats.open} color="bg-blue-500" />
-        <StatCard label="Closed" value={stats.closed} color="bg-emerald-500" />
+        <StatCard label={L.total} value={stats.total} color="bg-zinc-500" />
+        <StatCard label={L.p1} value={stats.p1} color="bg-red-600" />
+        <StatCard label={L.p2} value={stats.p2} color="bg-orange-500" />
+        <StatCard label={L.p3} value={stats.p3} color="bg-yellow-500" />
+        <StatCard label={L.open} value={stats.open} color="bg-blue-500" />
+        <StatCard label={L.closed} value={stats.closed} color="bg-emerald-500" />
       </div>
 
       {/* Submit Form */}
@@ -349,48 +398,48 @@ export default function AlertCenter() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />
-              Report New Safety Alert
+              {L.reportTitle}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Alert Type *</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{L.alertType}</label>
                 <select value={alertType} onChange={(e) => setAlertType(e.target.value)} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
-                  <option value="">Select type...</option>
-                  {ALERT_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
+                  <option value="">{L.selectType}</option>
+                  {ALERT_TYPES.map((t) => (<option key={t.value} value={t.value}>{labelOf(t, lang)}</option>))}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Priority *</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{L.priority}</label>
                 <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
-                  <option value="">Select priority...</option>
-                  {PRIORITIES.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
+                  <option value="">{L.selectPriority}</option>
+                  {PRIORITIES.map((p) => (<option key={p.value} value={p.value}>{labelOf(p, lang)}</option>))}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Location *</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{L.location}</label>
                 <select value={location} onChange={(e) => setLocation(e.target.value)} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm">
-                  <option value="">Select location...</option>
+                  <option value="">{L.selectLocation}</option>
                   {TRAINS.map((t) => (<option key={t} value={t}>{t}</option>))}
-                  <option value="other">Other (specify)</option>
+                  <option value="other">{L.otherSpecify}</option>
                 </select>
               </div>
             </div>
             {location === "other" && (
-              <Input value={customLocation} onChange={(e) => setCustomLocation(e.target.value)} placeholder="Enter location..." />
+              <Input value={customLocation} onChange={(e) => setCustomLocation(e.target.value)} placeholder={L.enterLocation} />
             )}
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the safety incident in detail..." rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={L.describe} rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" />
             <div className="flex items-center gap-3">
               <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-dashed border-border rounded-lg hover:bg-secondary transition-colors text-sm">
                 <Camera className="h-4 w-4" />
-                {photo ? photo.name : "Choose photo (PNG, JPG, HEIC)..."}
+                {photo ? photo.name : L.choosePhoto}
                 <input type="file" accept="image/*,.heic,.heif" className="hidden" onChange={handlePhotoChange} />
               </label>
               {photoPreview && <img src={photoPreview} alt="Preview" className="h-16 w-16 object-cover rounded border border-border" />}
             </div>
             <Button onClick={submitAlert} disabled={submitting} className="w-full bg-red-600 hover:bg-red-700 text-white">
-              {submitting ? "Submitting..." : "Submit Alert"}
+              {submitting ? L.submitting : L.submitAlert}
             </Button>
           </CardContent>
         </Card>
@@ -401,24 +450,24 @@ export default function AlertCenter() {
         <CardContent className="pt-4">
           <div className="flex flex-wrap gap-2 items-center">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search alerts..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-48 h-8 text-sm" />
+            <Input placeholder={L.searchAlerts} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-48 h-8 text-sm" />
             <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
-              <option value="">All Priorities</option>
-              {PRIORITIES.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
+              <option value="">{L.allPriorities}</option>
+              {PRIORITIES.map((p) => (<option key={p.value} value={p.value}>{labelOf(p, lang)}</option>))}
             </select>
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
-              <option value="">All Types</option>
-              {ALERT_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
+              <option value="">{L.allTypes}</option>
+              {ALERT_TYPES.map((t) => (<option key={t.value} value={t.value}>{labelOf(t, lang)}</option>))}
             </select>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
-              <option value="">All Status</option>
-              <option value="OPEN">Open</option>
-              <option value="CLOSED">Closed</option>
+              <option value="">{L.allStatus}</option>
+              <option value="OPEN">{statusLabel("OPEN", lang)}</option>
+              <option value="CLOSED">{statusLabel("CLOSED", lang)}</option>
             </select>
-            <Input placeholder="Location..." value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)} className="w-32 h-8 text-xs" />
+            <Input placeholder={L.locationDots} value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)} className="w-32 h-8 text-xs" />
             {(filterPriority || filterType || filterLocation || filterStatus || searchQuery) && (
               <Button variant="ghost" size="sm" onClick={() => { setFilterPriority(""); setFilterType(""); setFilterLocation(""); setFilterStatus(""); setSearchQuery(""); }}>
-                <X className="h-3 w-3" /> Clear
+                <X className="h-3 w-3" /> {L.clear}
               </Button>
             )}
           </div>
@@ -429,25 +478,25 @@ export default function AlertCenter() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading alerts...</div>
+            <div className="p-8 text-center text-muted-foreground">{L.loadingAlerts}</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <ShieldAlert className="h-10 w-10 mx-auto mb-2 opacity-30" />
-              No alerts found matching your filters.
+              {L.noAlerts}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/40">
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("priority")} className="flex items-center gap-1">Priority <ArrowUpDown className="h-3 w-3" /></button></th>
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("alert_type")} className="flex items-center gap-1">Type <ArrowUpDown className="h-3 w-3" /></button></th>
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("location")} className="flex items-center gap-1">Location <ArrowUpDown className="h-3 w-3" /></button></th>
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">Description</th>
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">Photo</th>
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("created_at")} className="flex items-center gap-1">Date <ArrowUpDown className="h-3 w-3" /></button></th>
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">Actions</th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("priority")} className="flex items-center gap-1">{L.priority.replace(" *", "")} <ArrowUpDown className="h-3 w-3" /></button></th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("alert_type")} className="flex items-center gap-1">{L.type} <ArrowUpDown className="h-3 w-3" /></button></th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("location")} className="flex items-center gap-1">{L.location.replace(" *", "")} <ArrowUpDown className="h-3 w-3" /></button></th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">{L.description}</th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">{L.photo}</th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider"><button onClick={() => toggleSort("created_at")} className="flex items-center gap-1">{L.date} <ArrowUpDown className="h-3 w-3" /></button></th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">{L.status}</th>
+                    <th className="px-4 py-3 text-left font-medium text-xs uppercase tracking-wider">{L.actions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -463,22 +512,22 @@ export default function AlertCenter() {
                           <td colSpan={8} className="px-4 py-3">
                             <div className="space-y-2">
                               <div className="grid grid-cols-4 gap-2">
-                                <select value={editType} onChange={(e) => setEditType(e.target.value)} className="h-9 rounded border px-2 text-xs">{ALERT_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}</select>
-                                <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="h-9 rounded border px-2 text-xs">{PRIORITIES.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}</select>
-                                <select value={editLocation} onChange={(e) => setEditLocation(e.target.value)} className="h-9 rounded border px-2 text-xs">{TRAINS.map((t) => (<option key={t} value={t}>{t}</option>))}<option value="other">Other</option></select>
+                                <select value={editType} onChange={(e) => setEditType(e.target.value)} className="h-9 rounded border px-2 text-xs">{ALERT_TYPES.map((t) => (<option key={t.value} value={t.value}>{labelOf(t, lang)}</option>))}</select>
+                                <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="h-9 rounded border px-2 text-xs">{PRIORITIES.map((p) => (<option key={p.value} value={p.value}>{labelOf(p, lang)}</option>))}</select>
+                                <select value={editLocation} onChange={(e) => setEditLocation(e.target.value)} className="h-9 rounded border px-2 text-xs">{TRAINS.map((t) => (<option key={t} value={t}>{t}</option>))}<option value="other">{L.other}</option></select>
                                 <div className="flex gap-2">
-                                  <Button size="sm" onClick={saveEdit} className="h-9 text-xs">Save</Button>
-                                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)} className="h-9 text-xs">Cancel</Button>
+                                  <Button size="sm" onClick={saveEdit} className="h-9 text-xs">{L.save}</Button>
+                                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)} className="h-9 text-xs">{L.cancel}</Button>
                                 </div>
                               </div>
-                              {editLocation === "other" && <Input value={editCustomLocation} onChange={(e) => setEditCustomLocation(e.target.value)} placeholder="Location..." className="h-9 text-xs" />}
+                              {editLocation === "other" && <Input value={editCustomLocation} onChange={(e) => setEditCustomLocation(e.target.value)} placeholder={L.locationDots} className="h-9 text-xs" />}
                               <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} className="w-full rounded border px-2 py-1 text-xs resize-none" />
                             </div>
                           </td>
                         ) : (
                           <>
-                            <td className="px-4 py-3"><div className="flex items-center gap-2"><PriIcon className={`h-4 w-4 ${pri?.textColor ?? ""}`} /><Badge className={`${pri?.color ?? "bg-gray-500"} text-white border-0 text-xs`}>{pri?.label ?? alert.priority}</Badge></div></td>
-                            <td className="px-4 py-3"><Badge variant="outline" className="text-xs">{type?.label ?? alert.alert_type}</Badge></td>
+                            <td className="px-4 py-3"><div className="flex items-center gap-2"><PriIcon className={`h-4 w-4 ${pri?.textColor ?? ""}`} /><Badge className={`${pri?.color ?? "bg-gray-500"} text-white border-0 text-xs`}>{pri ? labelOf(pri, lang) : alert.priority}</Badge></div></td>
+                            <td className="px-4 py-3"><Badge variant="outline" className="text-xs">{type ? labelOf(type, lang) : alert.alert_type}</Badge></td>
                             <td className="px-4 py-3"><div className="flex items-center gap-1 text-xs"><MapPin className="h-3 w-3 text-muted-foreground" />{alert.location}</div></td>
                             <td className="px-4 py-3 max-w-xs"><p className="text-xs text-foreground line-clamp-2">{alert.description}</p></td>
                             <td className="px-4 py-3">{alert.photo_url ? (
@@ -488,7 +537,7 @@ export default function AlertCenter() {
                               </button>
                             ) : <span className="text-xs text-muted-foreground">—</span>}</td>
                             <td className="px-4 py-3"><div className="flex items-center gap-1 text-xs text-muted-foreground"><Calendar className="h-3 w-3" />{new Date(alert.created_at).toLocaleDateString()}</div></td>
-                            <td className="px-4 py-3"><Badge variant={alert.status === "OPEN" ? "default" : "secondary"} className="text-[10px]">{alert.status}</Badge></td>
+                            <td className="px-4 py-3"><Badge variant={alert.status === "OPEN" ? "default" : "secondary"} className="text-[10px]">{statusLabel(alert.status, lang)}</Badge></td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(alert)}><Pencil className="h-3 w-3" /></Button>
@@ -512,7 +561,7 @@ export default function AlertCenter() {
       {zoomPhoto && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setZoomPhoto(null)}>
           <button className="absolute top-4 right-4 text-white hover:text-gray-300" onClick={() => setZoomPhoto(null)}><X className="h-8 w-8" /></button>
-          <img src={zoomPhoto} alt="Full size" className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+          <img src={zoomPhoto} alt={lang === "fr" ? "Image complète" : "Full size"} className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>

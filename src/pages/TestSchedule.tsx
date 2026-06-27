@@ -6,20 +6,67 @@ import { buildSchedule } from "@/lib/alertEngine";
 import type { ScheduleItem, ScheduleStatus } from "@/types/alerts";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/contexts/I18nContext";
 
 type SortKey = "days_left" | "status" | "tag";
 
 const STATUS_ORDER: Record<ScheduleStatus, number> = { OVERDUE: 0, DUE_SOON: 1, OK: 2 };
 
-function StatusBadge({ status }: { status: ScheduleStatus }) {
+const labels = {
+  en: {
+    title: "Next Test Schedule",
+    summary: (total: number, overdue: number, dueSoon: number) =>
+      `${total} equipment tracked · ${overdue} overdue · ${dueSoon} due within 30 days`,
+    search: "Search tag…",
+    all: "All",
+    sort: "Sort:",
+    days: "Days",
+    status: "Status",
+    tag: "Tag",
+    lastTest: "Last Test",
+    nextDue: "Next Due",
+    remaining: "Remaining",
+    loading: "Loading…",
+    empty: "No equipment matches the filters",
+    overdue: "OVERDUE",
+    dueSoon: "DUE SOON",
+    ok: "OK",
+    daySuffix: "d",
+  },
+  fr: {
+    title: "Prochain calendrier d'essais",
+    summary: (total: number, overdue: number, dueSoon: number) =>
+      `${total} équipements suivis · ${overdue} en retard · ${dueSoon} à tester sous 30 jours`,
+    search: "Rechercher un tag…",
+    all: "Tous",
+    sort: "Trier :",
+    days: "Jours",
+    status: "Statut",
+    tag: "Tag",
+    lastTest: "Dernier essai",
+    nextDue: "Prochain essai",
+    remaining: "Restant",
+    loading: "Chargement…",
+    empty: "Aucun équipement ne correspond aux filtres",
+    overdue: "EN RETARD",
+    dueSoon: "BIENTÔT DÛ",
+    ok: "OK",
+    daySuffix: "j",
+  },
+};
+
+function StatusBadge({ status, lang }: { status: ScheduleStatus; lang: "en" | "fr" }) {
+  const L = labels[lang];
   if (status === "OVERDUE")
-    return <Badge className="bg-red-600 text-white font-mono text-[10px]">OVERDUE</Badge>;
+    return <Badge className="bg-red-600 text-white font-mono text-[10px]">{L.overdue}</Badge>;
   if (status === "DUE_SOON")
-    return <Badge className="bg-amber-500 text-white font-mono text-[10px]">DUE SOON</Badge>;
-  return <Badge variant="outline" className="text-emerald-500 border-emerald-500/40 font-mono text-[10px]">OK</Badge>;
+    return <Badge className="bg-amber-500 text-white font-mono text-[10px]">{L.dueSoon}</Badge>;
+  return <Badge variant="outline" className="text-emerald-500 border-emerald-500/40 font-mono text-[10px]">{L.ok}</Badge>;
 }
 
 export default function TestSchedule() {
+  const { lang } = useI18n();
+  const L = labels[lang];
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("days_left");
@@ -50,22 +97,28 @@ export default function TestSchedule() {
   const overdueCount = items.filter((i) => i.status === "OVERDUE").length;
   const dueSoonCount  = items.filter((i) => i.status === "DUE_SOON").length;
 
+  const filterLabel = (s: ScheduleStatus | "ALL") => {
+    if (s === "ALL") return L.all;
+    if (s === "OVERDUE") return L.overdue;
+    if (s === "DUE_SOON") return L.dueSoon;
+    return L.ok;
+  };
+
   return (
     <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto">
       <div className="flex items-center gap-2 mb-2">
         <CalendarClock className="h-5 w-5 text-accent" />
-        <h1 className="text-2xl font-display font-bold">Next Test Schedule</h1>
+        <h1 className="text-2xl font-display font-bold">{L.title}</h1>
       </div>
       <p className="text-sm text-muted-foreground mb-6">
-        {items.length} equipment tracked · {overdueCount} overdue · {dueSoonCount} due within 30 days
+        {L.summary(items.length, overdueCount, dueSoonCount)}
       </p>
 
-      {/* Filters */}
       <div className="border border-border rounded-lg bg-card p-4 mb-4 flex flex-col md:flex-row gap-3">
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search tag…"
+          placeholder={L.search}
           className="md:max-w-xs"
         />
         <div className="flex gap-1.5 flex-wrap">
@@ -79,12 +132,12 @@ export default function TestSchedule() {
                   : "border-border text-muted-foreground hover:border-accent/50"
               }`}
             >
-              {s === "ALL" ? "All" : s.replace("_", " ")}
+              {filterLabel(s)}
             </button>
           ))}
         </div>
         <div className="md:ml-auto flex gap-1.5 items-center">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Sort:</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{L.sort}</span>
           {(["days_left", "status", "tag"] as SortKey[]).map((k) => (
             <button
               key={k}
@@ -95,26 +148,25 @@ export default function TestSchedule() {
                   : "border-border text-muted-foreground hover:border-accent/50"
               }`}
             >
-              {k === "days_left" ? "Days" : k === "status" ? "Status" : "Tag"}
+              {k === "days_left" ? L.days : k === "status" ? L.status : L.tag}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Table */}
       <div className="border border-border rounded-lg overflow-hidden bg-card">
         <div className="hidden md:grid grid-cols-[1fr_140px_140px_120px_120px] bg-secondary/60 text-[10px] uppercase tracking-wider text-muted-foreground px-4 py-2.5 font-semibold gap-2">
-          <div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" /> Tag</div>
-          <div>Last Test</div>
-          <div>Next Due</div>
-          <div>Remaining</div>
-          <div>Status</div>
+          <div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" /> {L.tag}</div>
+          <div>{L.lastTest}</div>
+          <div>{L.nextDue}</div>
+          <div>{L.remaining}</div>
+          <div>{L.status}</div>
         </div>
 
         {loading ? (
-          <div className="text-sm text-muted-foreground text-center py-12">Loading…</div>
+          <div className="text-sm text-muted-foreground text-center py-12">{L.loading}</div>
         ) : filtered.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-12">No equipment matches the filters</div>
+          <div className="text-sm text-muted-foreground text-center py-12">{L.empty}</div>
         ) : (
           <div className="divide-y divide-border">
             {filtered.map((item) => (
@@ -132,9 +184,9 @@ export default function TestSchedule() {
                 <div className={`hidden md:block text-xs font-bold font-mono ${
                   item.status === "OVERDUE" ? "text-red-500" : item.status === "DUE_SOON" ? "text-amber-500" : "text-foreground"
                 }`}>
-                  {item.days_left === null ? "—" : item.days_left < 0 ? `−${Math.abs(item.days_left)}d` : `${item.days_left}d`}
+                  {item.days_left === null ? "—" : item.days_left < 0 ? `−${Math.abs(item.days_left)}${L.daySuffix}` : `${item.days_left}${L.daySuffix}`}
                 </div>
-                <div className="ml-auto md:ml-0"><StatusBadge status={item.status} /></div>
+                <div className="ml-auto md:ml-0"><StatusBadge status={item.status} lang={lang} /></div>
               </Link>
             ))}
           </div>
